@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: transcendence_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    networks:
+      - transcendence_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for Django Channels)
+  redis:
+    image: redis:7-alpine
+    container_name: transcendence_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - transcendence_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Ganache (Ethereum test blockchain)
+  ganache:
+    image: trufflesuite/ganache:latest
+    container_name: transcendence_ganache
+    ports:
+      - "8545:8545"
+    command:
+      - "--mnemonic"
+      - "transcendence blockchain test network for ft_transcendence project"
+      - "--networkId"
+      - "1337"
+      - "--accounts"
+      - "10"
+      - "--defaultBalanceEther"
+      - "100"
+    networks:
+      - transcendence_network
+
+  # Django Backend
+  web:
+    build: .
+    container_name: transcendence_web
+    volumes:
+      # - .:/app  # Commented for debugging entrypoint issue
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ganache:
+        condition: service_started
+    networks:
+      - transcendence_network
+
+  # Nginx (Reverse Proxy with SSL)
+  nginx:
+    image: nginx:alpine
+    container_name: transcendence_nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:z
+      - ./nginx/ssl:/etc/nginx/ssl:z
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+      - ./frontend/dist:/usr/share/nginx/html:z
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"
+    depends_on:
+      - web
+    networks:
+      - transcendence_network
+
+networks:
+  transcendence_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
