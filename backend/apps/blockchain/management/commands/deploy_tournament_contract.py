@@ -36,7 +36,7 @@ class Command(BaseCommand):
 
             if not web3_service.is_connected():
                 self.stdout.write(self.style.ERROR("Failed to connect to blockchain"))
-                self.stdout.write(self.style.WARNING("Make sure Ganache is running on http://ganache:8545"))
+                self.stdout.write(self.style.WARNING("Make sure WEB3_PROVIDER_URI is correctly configured for Avalanche Fuji testnet"))
                 return
 
             self.stdout.write(self.style.SUCCESS(f"Connected! Block number: {web3_service.get_block_number()}"))
@@ -107,7 +107,7 @@ class Command(BaseCommand):
                 bytecode=bytecode,
                 deployed_by=admin_user,
                 deployment_tx=tx_hash,
-                network='ganache',
+                network='avalanche_fuji',
                 is_active=True
             )
 
@@ -143,6 +143,6 @@ class Command(BaseCommand):
         self.stdout.write("=" * 60)
         self.stdout.write(f"\nContract Address: {contract_address}")
         self.stdout.write(f"Transaction Hash: {tx_hash}")
-        self.stdout.write(f"Network: ganache")
+        self.stdout.write(f"Network: Avalanche Fuji Testnet")
         self.stdout.write(f"\nYou can now store tournament scores on the blockchain!")
         self.stdout.write(f"API Endpoint: POST /api/blockchain/tournaments/<id>/store/\n")

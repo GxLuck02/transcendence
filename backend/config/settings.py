@@ -198,8 +198,9 @@ OAUTH42_CLIENT_ID = os.getenv('OAUTH42_CLIENT_ID', '')
 OAUTH42_SECRET = os.getenv('OAUTH42_SECRET', '')
 OAUTH42_REDIRECT_URI = os.getenv('OAUTH42_REDIRECT_URI', 'https://localhost:8443/api/auth/oauth/42/callback/')
 
-# Blockchain Settings
-GANACHE_URL = os.getenv('GANACHE_URL', 'http://ganache:8545')
+# Blockchain Settings - Avalanche
+WEB3_PROVIDER_URI = os.getenv('WEB3_PROVIDER_URI', 'https://api.avax-test.network/ext/bc/C/rpc')
+BLOCKCHAIN_PRIVATE_KEY = os.getenv('BLOCKCHAIN_PRIVATE_KEY', '')
 CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS', '')
 
 # Logging

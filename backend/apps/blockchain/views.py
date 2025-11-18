@@ -34,7 +34,8 @@ class BlockchainStatusView(APIView):
                 'connected': True,
                 'block_number': block_number,
                 'default_account': default_account,
-                'network': 'ganache'
+                'network': 'avalanche_fuji',
+                'chain_id': web3_service.w3.eth.chain_id
             })
 
         except Exception as e:

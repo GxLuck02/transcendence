@@ -15,22 +15,25 @@ class Web3Service:
     """
 
     def __init__(self):
-        # Connect to Ganache
-        self.w3 = Web3(Web3.HTTPProvider(os.environ.get('WEB3_PROVIDER_URI', 'http://ganache:8545')))
+        # Connect to Avalanche C-Chain (Fuji testnet)
+        self.w3 = Web3(Web3.HTTPProvider(os.environ.get('WEB3_PROVIDER_URI', 'https://api.avax-test.network/ext/bc/C/rpc')))
 
-        # Add POA middleware for Ganache compatibility
+        # Add POA middleware for Avalanche compatibility
         self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
-        # Default account (first account from Ganache)
-        if self.w3.is_connected():
-            accounts = self.w3.eth.accounts
-            if accounts:
-                self.default_account = accounts[0]
+        # Default account from private key
+        self.private_key = os.environ.get('BLOCKCHAIN_PRIVATE_KEY')
+        if self.w3.is_connected() and self.private_key:
+            try:
+                account = self.w3.eth.account.from_key(self.private_key)
+                self.default_account = account.address
                 self.w3.eth.default_account = self.default_account
-            else:
+            except Exception:
                 self.default_account = None
+                self.private_key = None
         else:
             self.default_account = None
+            self.private_key = None
 
     def is_connected(self):
         """Check if connected to blockchain"""
@@ -101,6 +104,9 @@ class Web3Service:
         if not self.default_account:
             raise Exception("No default account available")
 
+        if not self.private_key:
+            raise Exception("No private key available")
+
         # Create contract object
         Contract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
 
@@ -108,12 +114,16 @@ class Web3Service:
         tx = Contract.constructor(*constructor_args).build_transaction({
             'from': self.default_account,
             'nonce': self.w3.eth.get_transaction_count(self.default_account),
-            'gas': 2000000,
-            'gasPrice': self.w3.eth.gas_price
+            'gas': 3000000,
+            'gasPrice': self.w3.eth.gas_price,
+            'chainId': self.w3.eth.chain_id
         })
 
-        # Send transaction
-        tx_hash = self.w3.eth.send_transaction(tx)
+        # Sign transaction
+        signed_tx = self.w3.eth.account.sign_transaction(tx, self.private_key)
+
+        # Send signed transaction
+        tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
         # Wait for transaction receipt
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
@@ -171,18 +181,25 @@ class Web3Service:
         if not self.default_account:
             raise Exception("No default account available")
 
+        if not self.private_key:
+            raise Exception("No private key available")
+
         function = getattr(contract.functions, function_name)
 
         # Build transaction
         tx = function(*args).build_transaction({
             'from': self.default_account,
             'nonce': self.w3.eth.get_transaction_count(self.default_account),
-            'gas': 2000000,
-            'gasPrice': self.w3.eth.gas_price
+            'gas': 3000000,
+            'gasPrice': self.w3.eth.gas_price,
+            'chainId': self.w3.eth.chain_id
         })
 
-        # Send transaction
-        tx_hash = self.w3.eth.send_transaction(tx)
+        # Sign transaction
+        signed_tx = self.w3.eth.account.sign_transaction(tx, self.private_key)
+
+        # Send signed transaction
+        tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
         # Wait for receipt
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)

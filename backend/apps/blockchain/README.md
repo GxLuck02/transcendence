@@ -1,13 +1,13 @@
 # Blockchain Module
 
-This module implements blockchain integration for storing tournament scores on Ethereum using smart contracts.
+This module implements blockchain integration for storing tournament scores on Avalanche C-Chain using smart contracts.
 
 ## Features
 
 - **TournamentScore Smart Contract**: Solidity smart contract for immutable tournament score storage
 - **Web3 Integration**: Python service using web3.py for blockchain interaction
 - **RESTful API**: Django REST Framework endpoints for blockchain operations
-- **Ganache Support**: Local Ethereum blockchain for development
+- **Avalanche Support**: Integration with Avalanche Fuji testnet (C-Chain)
 
 ## Architecture
 
@@ -48,18 +48,26 @@ This module implements blockchain integration for storing tournament scores on E
 
 ## Setup
 
-### 1. Start Ganache
+### 1. Configure Avalanche Connection
 
-Ganache is included in `docker-compose.yml`:
+Edit your `.env` file with Avalanche Fuji testnet configuration:
 
 ```bash
-docker compose up -d ganache
+WEB3_PROVIDER_URI=https://api.avax-test.network/ext/bc/C/rpc
+BLOCKCHAIN_PRIVATE_KEY=your-private-key-here
 ```
 
-**Note for ARM users (M1/M2 Mac, ARM64 Linux)**: The official Ganache Docker image may not work on ARM architecture due to QEMU incompatibility. If Ganache crashes, you can:
-- Use an alternative local blockchain (Hardhat Network, etc.)
-- Deploy to a testnet (Sepolia, Goerli)
-- Run on x86_64 architecture
+**Important**:
+- Get AVAX testnet tokens from the [Avalanche Fuji Faucet](https://faucet.avax.network/)
+- Never commit your private key to version control
+- The private key should be without the `0x` prefix
+
+**Network Details**:
+- Network Name: Avalanche Fuji C-Chain
+- RPC URL: https://api.avax-test.network/ext/bc/C/rpc
+- Chain ID: 43113
+- Currency Symbol: AVAX
+- Block Explorer: https://testnet.snowtrace.io/
 
 ### 2. Run Migrations
 
@@ -74,11 +82,13 @@ docker compose exec web python manage.py deploy_tournament_contract
 ```
 
 This will:
-1. Connect to Ganache
+1. Connect to Avalanche Fuji testnet
 2. Compile the TournamentScore smart contract
-3. Deploy it to the blockchain
+3. Deploy it to the blockchain (requires AVAX for gas fees)
 4. Save contract details to database
 5. Run test functions
+
+**Note**: Ensure you have sufficient AVAX in your account for deployment gas fees.
 
 ## Usage
 
@@ -155,15 +165,15 @@ tx_hash, tx_receipt = web3_service.send_contract_transaction(
 
 ## Troubleshooting
 
-### Ganache Connection Failed
+### Avalanche Connection Failed
 
 **Symptoms**: "Not connected to blockchain" error
 
 **Solutions**:
-1. Check Ganache container is running: `docker compose ps ganache`
-2. Check Ganache logs: `docker compose logs ganache`
-3. Restart Ganache: `docker compose restart ganache`
-4. Check `WEB3_PROVIDER_URI` environment variable
+1. Check your internet connection
+2. Verify `WEB3_PROVIDER_URI` is correctly set to `https://api.avax-test.network/ext/bc/C/rpc`
+3. Check if Avalanche Fuji testnet is operational at [Avalanche Status](https://status.avax.network/)
+4. Verify your `.env` file is properly loaded
 
 ### Contract Compilation Failed
 
@@ -180,15 +190,17 @@ tx_hash, tx_receipt = web3_service.send_contract_transaction(
 
 **Solutions**:
 1. Check contract function requirements
-2. Verify gas limit is sufficient
-3. Check account has sufficient balance
+2. Verify gas limit is sufficient (increased to 3M for Avalanche)
+3. Check account has sufficient AVAX balance for gas fees
 4. Review contract error messages
+5. Verify your private key is correctly configured
 
 ## Future Enhancements
 
-- [ ] Support for multiple blockchain networks
-- [ ] Gas price optimization
+- [ ] Support for Avalanche Mainnet
+- [ ] Gas price optimization for Avalanche
 - [ ] Event listening and notifications
 - [ ] Batch transaction processing
 - [ ] Contract upgradeability patterns
-- [ ] Integration with external wallets (MetaMask)
+- [ ] Integration with Core Wallet and MetaMask
+- [ ] Support for Avalanche subnets

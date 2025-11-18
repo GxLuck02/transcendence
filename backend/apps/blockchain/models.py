@@ -110,8 +110,8 @@ class SmartContract(models.Model):
     deployment_tx = models.CharField(max_length=200)
     network = models.CharField(
         max_length=50,
-        default='ganache',
-        help_text="Blockchain network (ganache, testnet, mainnet)"
+        default='avalanche_fuji',
+        help_text="Blockchain network (avalanche_fuji, avalanche_mainnet)"
     )
 
     is_active = models.BooleanField(default=True)

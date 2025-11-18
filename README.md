@@ -4,12 +4,15 @@
 
 ## 🚨 AVERTISSEMENT - Non-Conformités Critiques
 
-Ce projet contient actuellement **plusieurs non-conformités critiques** par rapport au sujet officiel :
-- ❌ Backend : Django au lieu de PHP pur ou Fastify/Node.js
-- ❌ Blockchain : Ganache/Ethereum au lieu d'Avalanche
+Ce projet contient actuellement **une non-conformité critique** par rapport au sujet officiel :
+- ❌ **Backend : Django au lieu de PHP pur ou Fastify/Node.js**
 - ⚠️ Redis : Non mentionné dans le sujet (usage à justifier)
 
-**Le projet doit être significativement refondu pour être conforme.** Voir détails ci-dessous.
+### ✅ Conformités validées :
+- ✅ **Blockchain : Avalanche Fuji testnet** (C-Chain)
+- ✅ **Base de données : SQLite**
+
+**Le backend doit être réécrit pour être conforme.** Voir détails ci-dessous.
 
 ## 📋 Description
 
@@ -28,15 +31,15 @@ Selon le sujet (Section IV.2 - Page 8), les seules options autorisées sont :
 - Soit **PHP pur** (sans framework)
 - Soit **Fastify + Node.js** (pour valider le module Framework Major)
 
-### Base de Données Non-Conforme
-**ATTENTION:** Le projet utilise actuellement **PostgreSQL 15**, ce qui n'est **PAS conforme** au sujet.
+### ✅ Base de Données Conforme
+Le projet utilise **SQLite** comme base de données, ce qui est **conforme** au sujet.
 
 Selon le sujet (Section V.2 - Page 15), module "Use a database for the backend" :
 > "The designated database for all DB instances in your project is **SQLite**"
 
-**Action requise:**
-- Remplacer PostgreSQL par **SQLite**
-- Adapter tous les modèles et migrations Django (ou du futur backend)
+**Configuration actuelle :**
+- ✅ SQLite (`django.db.backends.sqlite3`)
+- ✅ Fichier de base de données : `db/db.sqlite3`
 
 ### Redis - Non Mentionné dans le Sujet
 **ATTENTION:** Le projet utilise **Redis 7** pour Django Channels.
@@ -50,16 +53,18 @@ Redis n'est **pas mentionné** dans le sujet officiel. Son usage doit être :
 - Trouver une alternative conforme si nécessaire
 - Documenter la justification de son utilisation
 
-### Blockchain Non-Conforme
-**ATTENTION:** Le projet utilise **Ganache (Ethereum)**, ce qui n'est **PAS conforme** au sujet.
+### ✅ Blockchain Conforme
+Le projet utilise **Avalanche** (Fuji testnet), ce qui est **conforme** au sujet.
 
 Selon le sujet (Section V.2 - Page 15), module Blockchain :
 > "The chosen blockchain for this implementation is **Avalanche**, and **Solidity** will be the programming language"
 
-**Action requise:**
-- Remplacer Ganache par une **blockchain de test Avalanche**
-- Adapter les smart contracts Solidity pour Avalanche
-- Mettre à jour l'intégration Web3
+**Configuration actuelle :**
+- ✅ Avalanche Fuji testnet (C-Chain)
+- ✅ RPC URL : `https://api.avax-test.network/ext/bc/C/rpc`
+- ✅ Chain ID : 43113
+- ✅ Smart contracts en Solidity 0.8.0
+- ✅ Signature des transactions avec clé privée
 
 ## Modules Implémentés
 
@@ -75,12 +80,12 @@ Selon le sujet (Section V.2 - Page 15), module Blockchain :
 4. **Live Chat** - Chat temps réel avec WebSockets (10 pts) ✅
 5. **Additional Game** - Rock-Paper-Scissors avec matchmaking (10 pts) ✅
 6. **Remote Players** - Multiplayer Pong distant avec WebSocket (10 pts) ✅
-7. ~~**Blockchain** - Ganache/Ethereum~~ ❌ NON-CONFORME (doit être Avalanche)
+7. **Blockchain** - Avalanche Fuji testnet avec Solidity (10 pts) ✅
 
 ###  Modules Mineurs (20 points)
-8. ~~**PostgreSQL Database**~~ ❌ NON-CONFORME (doit être SQLite)
+8. **SQLite Database** (5 pts) ✅
 9. ~~**Django framework backend**~~ ❌ NON-CONFORME
-10. **TypeScript Frontend** (5 pts) ✅ (migration complétée)
+10. **TypeScript Frontend** (5 pts) ✅
 11. **Multiple Languages Support** (5 pts) 🔜 PRÉVU
 
 ### ⏳ Modules Prévus
@@ -89,23 +94,22 @@ Selon le sujet (Section V.2 - Page 15), module Blockchain :
 
 ##  Stack Technique
 
-### ❌ Technologies Actuelles (NON-CONFORMES)
+### ❌ Technologies NON-CONFORMES
 - **Backend:** Django 4.2.7 → ❌ Doit être **PHP pur** ou **Fastify/Node.js**
-- **Database:** PostgreSQL 15 → ❌ Doit être **SQLite**
-- **WebSockets:** Django Channels + Redis 7 → ❌ Redis non autorisé
-- **Blockchain:** Ganache (Ethereum) → ❌ Doit être **Avalanche**
+- **WebSockets:** Django Channels + Redis 7 → ⚠️ Redis non mentionné dans le sujet
 
-### ✅ Technologies Conformes
+### ✅ Technologies CONFORMES
 - **Frontend:** TypeScript (SPA avec Router et Vite)
+- **Database:** SQLite ✅
+- **Blockchain:** Avalanche Fuji testnet (C-Chain) ✅
+- **Smart Contracts:** Solidity 0.8.0 ✅
 - **Container:** Docker + Docker Compose
 - **Proxy:** Nginx avec SSL/TLS
 - **Auth:** JWT + OAuth 2.0 (à réimplémenter dans nouveau backend)
 
 ### 📋 Actions Requises
 1. Réécrire backend en **PHP pur** ou **Fastify/Node.js**
-2. Migrer de PostgreSQL vers **SQLite**
-3. Remplacer Redis ou justifier son usage
-4. Migrer de Ganache vers **Avalanche** (blockchain de test)
+2. Remplacer Redis ou justifier son usage
 
 ##  Installation et Lancement
 
@@ -298,34 +302,40 @@ L'IA utilise une approche de **prédiction de trajectoire** :
 
 ## 🔗 Blockchain
 
-### ❌ Configuration Actuelle (NON-CONFORME)
-- **Réseau:** Ganache (blockchain Ethereum de test) → ❌ **NON-CONFORME**
-- **Smart Contract:** TournamentScore.sol (Solidity 0.8.0)
+### ✅ Configuration Actuelle (CONFORME)
+- **Réseau:** Avalanche Fuji testnet (C-Chain) ✅
+- **RPC URL:** `https://api.avax-test.network/ext/bc/C/rpc`
+- **Chain ID:** 43113
+- **Smart Contract:** TournamentScore.sol (Solidity 0.8.0) ✅
 - **Fonction:** Stockage immuable des scores de tournoi
 - **Interaction:** Web3.py depuis Django
 - **Déploiement:** Command `deploy_tournament_contract`
 - **API Endpoints:** 7 endpoints REST pour interaction blockchain
 - **Documentation:** Voir `backend/apps/blockchain/README.md`
 
-### ⚠️ Non-Conformité Blockchain
-Selon le sujet (Section V.2 - Page 15), le module Blockchain impose :
-> "The chosen blockchain for this implementation is **Avalanche**, and **Solidity** will be the programming language"
+### 📋 Configuration Blockchain
 
-**Action requise:**
-- Remplacer Ganache par un réseau de test **Avalanche**
-- Adapter les smart contracts Solidity pour Avalanche
-- Mettre à jour l'intégration Web3 pour Avalanche
-- Conserver Solidity (conforme au sujet)
+Pour utiliser la blockchain Avalanche, vous devez :
 
-### Note Technique
-Le code blockchain actuel fonctionne avec Ganache mais nécessite :
-- Architecture x86_64 (incompatibilité QEMU sur ARM M1/M2 Mac)
-- Migration vers Avalanche pour conformité au sujet
+1. **Obtenir des AVAX testnet** depuis le [Avalanche Fuji Faucet](https://faucet.avax.network/)
+2. **Configurer votre `.env`** avec votre clé privée :
+   ```bash
+   WEB3_PROVIDER_URI=https://api.avax-test.network/ext/bc/C/rpc
+   BLOCKCHAIN_PRIVATE_KEY=votre-clé-privée-sans-0x
+   ```
+3. **Déployer le contrat** :
+   ```bash
+   docker compose exec web python manage.py deploy_tournament_contract
+   ```
 
+### 🔍 Explorer les transactions
+
+- **Testnet Explorer:** [https://testnet.snowtrace.io/](https://testnet.snowtrace.io/)
+- Toutes vos transactions seront visibles publiquement sur l'explorer
 
 #### ⏳ Nécessite Configuration Supplémentaire
 - [ ] OAuth 42 (credentials 42 API requis)
-- [ ] Blockchain contract deployment (nécessite architecture x86_64 pour Ganache)
+- [ ] Blockchain : Obtenir AVAX testnet et configurer la clé privée
 
 ## 📄 Licence
 
@@ -353,8 +363,15 @@ docker compose exec web python manage.py migrate --run-syncdb
 
 ### Blockchain - Contract non déployé
 ```bash
-# Déployer le smart contract
-docker compose exec web python manage.py deploy_contract
+# Déployer le smart contract sur Avalanche Fuji
+docker compose exec web python manage.py deploy_tournament_contract
+
+# Vérifier la connexion blockchain
+docker compose exec web python manage.py shell
+>>> from backend.apps.blockchain.services.web3_service import get_web3_service
+>>> ws = get_web3_service()
+>>> ws.is_connected()  # Doit retourner True
+>>> ws.w3.eth.chain_id  # Doit retourner 43113 (Fuji)
 ```
 
 ### Erreur 403 Forbidden sur le site

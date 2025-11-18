@@ -13,24 +13,6 @@ services:
       timeout: 3s
       retries: 5
 
-  # Ganache (Ethereum test blockchain)
-  ganache:
-    image: trufflesuite/ganache:latest
-    container_name: transcendence_ganache
-    ports:
-      - "8545:8545"
-    command:
-      - "--mnemonic"
-      - "transcendence blockchain test network for ft_transcendence project"
-      - "--networkId"
-      - "1337"
-      - "--accounts"
-      - "10"
-      - "--defaultBalanceEther"
-      - "100"
-    networks:
-      - transcendence_network
-
   # Django Backend
   web:
     build: .
@@ -47,8 +29,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      ganache:
-        condition: service_started
     networks:
       - transcendence_network
 
