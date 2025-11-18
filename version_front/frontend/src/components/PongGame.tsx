@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 
 const PongGame: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -13,7 +13,7 @@ const PongGame: React.FC = () => {
   const [isGameOver, setIsGameOver] = useState(false)
   const [winnerText, setWinnerText] = useState('')
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -60,9 +60,26 @@ const PongGame: React.FC = () => {
       }, 100)
     }
 
-    // initial resize
+    // initial resize + robust resize handling for production
+    // 1) initial attempt
     resizeCanvas()
-    window.addEventListener('resize', handleResizeDebounced)
+
+    // 2) observe container size changes (best option)
+    const containerEl = canvas.parentElement
+    let ro: ResizeObserver | null = null
+    try {
+      ro = new ResizeObserver(() => {
+        resizeCanvas()
+      })
+      if (containerEl) ro.observe(containerEl)
+    } catch (e) {
+      // ResizeObserver not supported -> fallback to window resize
+      window.addEventListener('resize', handleResizeDebounced)
+    }
+
+    // 3) fallback: ensure resize after first paint and a short timeout
+  const resizeRafId = requestAnimationFrame(() => resizeCanvas())
+  const timeoutId = window.setTimeout(() => resizeCanvas(), 150)
     // Types
     interface Ball {
       x: number
@@ -490,7 +507,10 @@ const PongGame: React.FC = () => {
     rafId = requestAnimationFrame(loop)
 
     return () => {
-      cancelAnimationFrame(rafId)
+  cancelAnimationFrame(resizeRafId)
+  window.clearTimeout(timeoutId)
+      if (ro && containerEl) ro.unobserve(containerEl)
+      window.removeEventListener('resize', handleResizeDebounced)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
       restartRef.current = null

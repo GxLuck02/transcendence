@@ -1,7 +1,10 @@
 .PHONY: build run stop clean logs restart help dev-start dev-stop install
 
 # Variables
-DOCKER_COMPOSE = sudo docker compose
+# Par défaut, SUDO est vide pour permettre l'exécution sans privilèges.
+# Si l'utilisateur a besoin de sudo, exécutez: SUDO=sudo make <target>
+SUDO ?=
+DOCKER_COMPOSE = $(SUDO)docker compose
 CONTAINER_NAME = pong_game
 CONTAINER_DEV = pong_game_dev
 
@@ -53,14 +56,14 @@ logs: ## Affiche les logs des conteneurs
 
 clean: ## Nettoie tout (conteneurs, images, volumes)
 	@echo "$(RED)Nettoyage complet...$(NC)"
-	@sudo docker rm -f $(CONTAINER_NAME) 2>/dev/null || true
-	@sudo docker rm -f $(CONTAINER_DEV) 2>/dev/null || true
+	@$(SUDO)docker rm -f $(CONTAINER_NAME) 2>/dev/null || true
+	@$(SUDO)docker rm -f $(CONTAINER_DEV) 2>/dev/null || true
 	$(DOCKER_COMPOSE) down -v --rmi all
 	@echo "$(GREEN)✓ Nettoyage terminé$(NC)"
 
 status: ## Affiche le statut des conteneurs
 	@echo "$(GREEN)Statut des conteneurs:$(NC)"
-	@sudo docker ps -a | grep $(CONTAINER_NAME) || echo "$(RED)Aucun conteneur trouvé$(NC)"
+	@$(SUDO)docker ps -a | grep $(CONTAINER_NAME) || echo "$(RED)Aucun conteneur trouvé$(NC)"
 
 re: clean run ## Reconstruit tout depuis zéro (production)
 	@echo "$(GREEN)✓ Reconstruction complète terminée$(NC)"
