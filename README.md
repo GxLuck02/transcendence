@@ -6,7 +6,6 @@
 
 Ce projet contient actuellement **plusieurs non-conformités critiques** par rapport au sujet officiel :
 - ❌ Backend : Django au lieu de PHP pur ou Fastify/Node.js
-- ❌ Base de données : PostgreSQL au lieu de SQLite
 - ❌ Blockchain : Ganache/Ethereum au lieu d'Avalanche
 - ⚠️ Redis : Non mentionné dans le sujet (usage à justifier)
 
