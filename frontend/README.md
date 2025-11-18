@@ -44,7 +44,7 @@ npm run dev
 
 ```bash
 # À la racine du projet
-docker-compose up
+docker compose up
 
 # Le frontend sera accessible via Nginx sur https://localhost:8443
 ```

@@ -50,48 +50,48 @@ env:
 
 build:
 	@echo "$(YELLOW)Building Docker containers...$(NC)"
-	docker-compose build
+	docker compose build
 	@echo "$(GREEN)✓ Build complete$(NC)"
 
 up:
 	@echo "$(YELLOW)Starting all services...$(NC)"
-	docker-compose up -d
+	docker compose up -d
 	@echo "$(GREEN)✓ Services started$(NC)"
 	@echo "$(GREEN)Access the application at: https://localhost:8443$(NC)"
 
 down:
 	@echo "$(YELLOW)Stopping all services...$(NC)"
-	docker-compose down
+	docker compose down
 	@echo "$(GREEN)✓ Services stopped$(NC)"
 
 clean: down
 	@echo "$(YELLOW)Removing containers...$(NC)"
-	docker-compose down -v --remove-orphans
+	docker compose down -v --remove-orphans
 	@echo "$(GREEN)✓ Containers removed$(NC)"
 
 fclean: clean
 	@echo "$(YELLOW)Full cleanup (containers + volumes + images)...$(NC)"
-	docker-compose down -v --rmi all --remove-orphans
+	docker compose down -v --rmi all --remove-orphans
 	@rm -rf nginx/ssl/*.pem
 	@echo "$(GREEN)✓ Full cleanup complete$(NC)"
 
 re: fclean setup build up
 
 logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 shell:
-	docker-compose exec web python manage.py shell
+	docker compose exec web python manage.py shell
 
 migrate:
-	docker-compose exec web python manage.py makemigrations
-	docker-compose exec web python manage.py migrate
+	docker compose exec web python manage.py makemigrations
+	docker compose exec web python manage.py migrate
 
 superuser:
-	docker-compose exec web python manage.py createsuperuser
+	docker compose exec web python manage.py createsuperuser
 
 test:
-	docker-compose exec web python manage.py test
+	docker compose exec web python manage.py test
 
 collectstatic:
-	docker-compose exec web python manage.py collectstatic --noinput
+	docker compose exec web python manage.py collectstatic --noinput

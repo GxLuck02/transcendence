@@ -133,11 +133,11 @@ cd Transcendence
 # Lancer tous les services (première fois)
 make up
 
-# Ou avec docker-compose directement
-docker-compose up --build
+# Ou avec docker compose directement
+docker compose up --build
 
 # En mode détaché
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 Le site sera accessible sur : **https://localhost:8443**
@@ -155,15 +155,15 @@ make logs        # Voir les logs
 make rebuild     # Rebuild complet
 
 # Docker Compose
-docker-compose logs -f              # Voir les logs en temps réel
-docker-compose down                 # Arrêter les services
-docker-compose down -v              # Arrêter et supprimer volumes
-docker-compose restart nginx        # Redémarrer nginx
+docker compose logs -f              # Voir les logs en temps réel
+docker compose down                 # Arrêter les services
+docker compose down -v              # Arrêter et supprimer volumes
+docker compose restart nginx        # Redémarrer nginx
 
 # Django
-docker-compose exec web python manage.py shell
-docker-compose exec web python manage.py createsuperuser
-docker-compose exec web python manage.py migrate
+docker compose exec web python manage.py shell
+docker compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py migrate
 ```
 
 ## 📁 Structure du Projet
@@ -275,26 +275,26 @@ Ce projet est réalisé dans le cadre du cursus de l'école 42.
 ### Le site ne démarre pas
 ```bash
 # Vérifier les logs
-docker-compose logs
+docker compose logs
 
 # Rebuild complet
-docker-compose down -v
-docker-compose up --build
+docker compose down -v
+docker compose up --build
 ```
 
 ### Erreurs de migration
 ```bash
-docker-compose exec web python manage.py migrate --run-syncdb
+docker compose exec web python manage.py migrate --run-syncdb
 ```
 
 ### WebSocket ne se connecte pas
-- Vérifier que Redis est démarré : `docker-compose ps`
-- Vérifier les logs : `docker-compose logs redis`
+- Vérifier que Redis est démarré : `docker compose ps`
+- Vérifier les logs : `docker compose logs redis`
 
 ### Blockchain - Contract non déployé
 ```bash
 # Déployer le smart contract
-docker-compose exec web python manage.py deploy_contract
+docker compose exec web python manage.py deploy_contract
 ```
 
 ---
@@ -308,7 +308,7 @@ cd Transcendence
 make up
 
 # Créer un compte admin (optionnel)
-docker-compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py createsuperuser
 
 # Accéder au site
 # https://localhost:8443

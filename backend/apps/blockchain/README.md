@@ -53,7 +53,7 @@ This module implements blockchain integration for storing tournament scores on E
 Ganache is included in `docker-compose.yml`:
 
 ```bash
-docker-compose up -d ganache
+docker compose up -d ganache
 ```
 
 **Note for ARM users (M1/M2 Mac, ARM64 Linux)**: The official Ganache Docker image may not work on ARM architecture due to QEMU incompatibility. If Ganache crashes, you can:
@@ -64,13 +64,13 @@ docker-compose up -d ganache
 ### 2. Run Migrations
 
 ```bash
-docker-compose exec web python manage.py migrate blockchain
+docker compose exec web python manage.py migrate blockchain
 ```
 
 ### 3. Deploy Smart Contract
 
 ```bash
-docker-compose exec web python manage.py deploy_tournament_contract
+docker compose exec web python manage.py deploy_tournament_contract
 ```
 
 This will:
@@ -160,9 +160,9 @@ tx_hash, tx_receipt = web3_service.send_contract_transaction(
 **Symptoms**: "Not connected to blockchain" error
 
 **Solutions**:
-1. Check Ganache container is running: `docker-compose ps ganache`
-2. Check Ganache logs: `docker-compose logs ganache`
-3. Restart Ganache: `docker-compose restart ganache`
+1. Check Ganache container is running: `docker compose ps ganache`
+2. Check Ganache logs: `docker compose logs ganache`
+3. Restart Ganache: `docker compose restart ganache`
 4. Check `WEB3_PROVIDER_URI` environment variable
 
 ### Contract Compilation Failed
