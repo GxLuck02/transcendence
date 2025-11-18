@@ -111,59 +111,121 @@ Selon le sujet (Section V.2 - Page 15), module Blockchain :
 ##  Installation et Lancement
 
 ### Prérequis
-- Docker
-- Docker Compose
+- **Docker** (v20.10+)
+- **Docker Compose** (v2.0+)
 - Credentials OAuth 42 (optionnel - pour OAuth 42 seulement)
 
-### Configuration
+**Note:** npm n'est pas requis ! Le build du frontend se fait automatiquement via Docker.
+
+### Configuration Rapide (Première Installation)
 
 1. **Cloner le repository**
 ```bash
 git clone <repo_url>
-cd Transcendence
+cd transcendence
 ```
 
-2. **Le fichier .env existe déjà** (vérifier les paramètres si besoin)
-
-**Note:** Le fichier .env est déjà configuré avec des valeurs par défaut fonctionnelles. Les credentials OAuth 42 sont optionnels et nécessaires uniquement pour l'authentification 42.
-
-### Lancement
-
+2. **Setup automatique** (génère SSL, .env et build le frontend)
 ```bash
-# Lancer tous les services (première fois)
+make setup
+```
+
+3. **Builder les conteneurs Docker**
+```bash
+make build
+```
+
+4. **Lancer les services**
+```bash
 make up
-
-# Ou avec docker compose directement
-docker compose up --build
-
-# En mode détaché
-docker compose up -d --build
 ```
 
 Le site sera accessible sur : **https://localhost:8443**
 
 **⚠️ Important:** Acceptez le certificat SSL auto-signé dans votre navigateur (certificat de développement)
 
-### Commandes Utiles
+### Configuration Manuelle (optionnel)
+
+Le fichier `.env` est créé automatiquement lors du `make setup`. Pour personnaliser :
+```bash
+# Éditer le fichier .env
+nano .env
+
+# Ajouter vos credentials OAuth 42 si nécessaire
+CLIENT_ID_42=votre_client_id
+CLIENT_SECRET_42=votre_client_secret
+```
+
+### Commandes Makefile
 
 ```bash
-# Makefile (recommandé)
+# Setup et déploiement
+make help        # Afficher toutes les commandes disponibles
+make setup       # Setup initial (SSL + .env + frontend)
+make frontend    # Build le frontend uniquement
+make build       # Build les conteneurs Docker
 make up          # Démarrer tous les services
 make down        # Arrêter tous les services
-make clean       # Nettoyer complètement
-make logs        # Voir les logs
-make rebuild     # Rebuild complet
 
-# Docker Compose
-docker compose logs -f              # Voir les logs en temps réel
-docker compose down                 # Arrêter les services
-docker compose down -v              # Arrêter et supprimer volumes
+# Développement
+make logs        # Voir les logs en temps réel
+make shell       # Ouvrir un shell Django
+make migrate     # Exécuter les migrations
+make superuser   # Créer un superutilisateur
+
+# Nettoyage
+make clean       # Arrêter et supprimer les conteneurs
+make fclean      # Nettoyage complet (conteneurs + volumes + images + frontend)
+make re          # Rebuild complet (fclean + setup + build + up)
+```
+
+### Commandes Docker Compose Avancées
+
+```bash
+# Logs
+docker compose logs -f              # Voir tous les logs en temps réel
+docker compose logs -f web          # Logs du backend uniquement
+docker compose logs -f nginx        # Logs nginx uniquement
+
+# Gestion des services
+docker compose ps                   # État des conteneurs
 docker compose restart nginx        # Redémarrer nginx
+docker compose down -v              # Arrêter et supprimer volumes
 
 # Django
 docker compose exec web python manage.py shell
 docker compose exec web python manage.py createsuperuser
 docker compose exec web python manage.py migrate
+docker compose exec web python manage.py collectstatic
+```
+
+### Troubleshooting Setup
+
+#### Problème : Frontend/dist vide (erreur 403)
+```bash
+# Rebuild le frontend
+make frontend
+
+# Ou manuellement avec Docker
+docker run --rm -v "$(pwd)/frontend:/app" -w /app node:20-alpine sh -c "npm install && npm run build"
+
+# Puis redémarrer nginx
+docker compose restart nginx
+```
+
+#### Problème : Certificats SSL invalides
+```bash
+# Régénérer les certificats
+rm -f nginx/ssl/*.pem
+make setup
+
+# Ou manuellement avec Docker
+docker run --rm -v "$(pwd)/nginx/ssl:/ssl" alpine/openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 -keyout /ssl/key.pem -out /ssl/cert.pem \
+  -subj "/C=FR/ST=Paris/L=Paris/O=42/OU=Transcendence/CN=localhost"
+
+# Redémarrer nginx
+docker compose restart nginx
 ```
 
 ## 📁 Structure du Projet
@@ -278,8 +340,7 @@ Ce projet est réalisé dans le cadre du cursus de l'école 42.
 docker compose logs
 
 # Rebuild complet
-docker compose down -v
-docker compose up --build
+make re
 ```
 
 ### Erreurs de migration
@@ -295,6 +356,13 @@ docker compose exec web python manage.py migrate --run-syncdb
 ```bash
 # Déployer le smart contract
 docker compose exec web python manage.py deploy_contract
+```
+
+### Erreur 403 Forbidden sur le site
+Le frontend n'a pas été build. Exécutez :
+```bash
+make frontend
+docker compose restart nginx
 ```
 
 ---
