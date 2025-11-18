@@ -74,15 +74,11 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.config.wsgi.application'
 ASGI_APPLICATION = 'backend.config.asgi.application'
 
-# Database
+# Database - SQLite (as per ft_transcendence subject requirements)
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('POSTGRES_DB', 'transcendence'),
-        'USER': os.getenv('POSTGRES_USER', 'transcendence_user'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'password'),
-        'HOST': os.getenv('POSTGRES_HOST', 'db'),
-        'PORT': os.getenv('POSTGRES_PORT', '5432'),
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db' / 'db.sqlite3',
     }
 }
 

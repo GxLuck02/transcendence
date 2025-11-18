@@ -12,11 +12,9 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    postgresql-client \
     gcc \
     python3-dev \
     musl-dev \
-    libpq-dev \
     netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
@@ -33,7 +31,7 @@ RUN chmod +x /app/entrypoint.sh
 COPY . /app/
 
 # Create necessary directories
-RUN mkdir -p /app/media /app/staticfiles
+RUN mkdir -p /app/media /app/staticfiles /app/db
 
 # Expose port
 EXPOSE 8000
