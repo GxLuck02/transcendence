@@ -2,6 +2,7 @@
  * Chat WebSocket Client
  * Part of ft_transcendence project
  */
+import { authService } from './auth.service';
 
 interface ChatWSMessage {
   type: 'connection_established' | 'message' | 'user_joined' | 'user_left' | 'error';
@@ -249,3 +250,89 @@ export class ChatClient {
 export const chatClient = new ChatClient();
 
 console.log('✅ Chat client loaded (TypeScript)');
+
+const API_BASE = 'https://localhost:8443/api';
+
+async function chatApiFetch(path: string, options: RequestInit = {}) {
+  const token = authService.getAccessToken();
+  if (!token) {
+    throw new Error('Authentification requise');
+  }
+
+  const headers = new Headers(options.headers || {});
+
+  if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  headers.set('Authorization', `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    let message = 'Erreur serveur';
+    try {
+      const error = await response.json();
+      message = error.error || Object.values(error).join(', ');
+    } catch {
+      // Ignore JSON parse errors
+    }
+    throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return await response.json();
+}
+
+export async function fetchConversations() {
+  return await chatApiFetch('/chat/conversations/');
+}
+
+export async function fetchDirectMessages(userId: number, limit: number = 50) {
+  return await chatApiFetch(`/chat/messages/?user=${userId}&limit=${limit}`);
+}
+
+export async function sendDirectMessage(options: {
+  recipientId: number;
+  content: string;
+  messageType?: 'text' | 'game_invite';
+  gameInviteType?: 'pong' | 'rps';
+  gameRoomCode?: string;
+}) {
+  return await chatApiFetch('/chat/messages/send/', {
+    method: 'POST',
+    body: JSON.stringify({
+      recipient_id: options.recipientId,
+      content: options.content,
+      message_type: options.messageType || 'text',
+      game_invite_type: options.gameInviteType,
+      game_room_code: options.gameRoomCode,
+    }),
+  });
+}
+
+export async function fetchNotifications(limit: number = 20) {
+  return await chatApiFetch(`/chat/notifications/?limit=${limit}`);
+}
+
+export async function markNotificationRead(notificationId: number) {
+  return await chatApiFetch(`/chat/notifications/${notificationId}/read/`, {
+    method: 'POST',
+  });
+}
+
+export async function markAllNotificationsRead() {
+  return await chatApiFetch('/chat/notifications/read-all/', {
+    method: 'POST',
+  });
+}
+
+export async function fetchUnreadMessagesSummary() {
+  return await chatApiFetch('/chat/messages/unread/');
+}

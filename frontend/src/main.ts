@@ -4,17 +4,50 @@
  */
 
 import { authService } from './services/auth.service';
-import { chatClient, ChatClient } from './services/chat.service';
+import {
+  chatClient,
+  ChatClient,
+  fetchConversations,
+  fetchDirectMessages,
+  sendDirectMessage,
+  fetchNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from './services/chat.service';
 import { PongGame } from './games/pong';
 import { RemotePongGame } from './games/pong-remote';
 import { rpsGame } from './games/rps';
 import { tournamentManager } from './services/tournament.service';
+import type { User } from './types';
+
+type LocalParticipant = {
+  id: number;
+  alias: string;
+  eliminated: boolean;
+};
+
+type LocalTournamentMatch = {
+  id: number;
+  round: number;
+  player1: LocalParticipant;
+  player2: LocalParticipant | null;
+  winner: LocalParticipant | null;
+  status: 'pending' | 'completed' | 'bye';
+};
 
 class Router {
   private routes: Record<string, () => void>;
   private currentChatClient: any = null;
   private currentPongGame: any = null;
   private matchmakingInterval: number | null = null;
+  private pongMatchmakingInterval: number | null = null;
+  private apiBaseUrl: string = 'https://localhost:8443/api';
+  private pendingInviteRoomCode: string | null = null;
+  private activeConversationUserId: number | null = null;
+  private blockedUserIds: Set<number> = new Set();
+  private remoteMatchInfo: { roomCode: string; matchId?: number; opponent?: { display_name?: string; username?: string } } | null = null;
+  private isInPongQueue: boolean = false;
+  private activeConversationDisplayName: string | null = null;
 
   constructor() {
     this.routes = {
@@ -101,8 +134,66 @@ class Router {
       this.matchmakingInterval = null;
     }
 
+    if (this.pongMatchmakingInterval !== null) {
+      clearInterval(this.pongMatchmakingInterval);
+      this.pongMatchmakingInterval = null;
+    }
+
+    if (this.isInPongQueue) {
+      void this.leavePongMatchmakingQueue(true);
+    }
+
+    this.pendingInviteRoomCode = null;
+    this.activeConversationUserId = null;
+    this.remoteMatchInfo = null;
+
     // Cleanup RPS game
     rpsGame.reset();
+  }
+
+  private async apiRequest(path: string, options: RequestInit = {}): Promise<any> {
+    const token = authService.getAccessToken();
+    if (!token) {
+      throw new Error('Authentification requise');
+    }
+
+    const headers = new Headers(options.headers || {});
+    if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    headers.set('Authorization', `Bearer ${token}`);
+
+    const response = await fetch(`${this.apiBaseUrl}${path}`, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      let message = 'Erreur serveur';
+      try {
+        const payload = await response.json();
+        if (typeof payload === 'string') {
+          message = payload;
+        } else if (payload.error) {
+          message = payload.error;
+        } else {
+          message = Object.values(payload)[0] as string;
+        }
+      } catch {
+        // Ignore JSON parsing errors
+      }
+      throw new Error(message);
+    }
+
+    if (response.status === 204) {
+      return null;
+    }
+
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
   }
 
   // Utility method to load external scripts dynamically
@@ -139,15 +230,15 @@ class Router {
         <div style="margin-top: 2rem;">
           <h3>Modules implémentés :</h3>
           <ul style="list-style: none; padding: 1rem;">
-            <li>✅ <strong>Backend Framework</strong>: Django REST Framework</li>
-            <li>✅ <strong>Frontend</strong>: TypeScript (SPA)</li>
-            <li>✅ <strong>Database</strong>: PostgreSQL</li>
-            <li>✅ <strong>User Management</strong>: Authentication complète avec JWT</li>
-            <li>✅ <strong>Remote Players</strong>: Multijoueur en ligne via WebSocket</li>
-            <li>✅ <strong>Live Chat</strong>: Messagerie en temps réel</li>
-            <li>✅ <strong>Jeu supplémentaire</strong>: Pierre-Feuille-Ciseaux avec matchmaking</li>
-            <li>✅ <strong>AI Opponent</strong>: 3 niveaux de difficulté</li>
-            <li>✅ <strong>Blockchain</strong>: Stockage des scores de tournois</li>
+            <li>✅ <strong>Frontend</strong> : SPA 100% TypeScript avec router maison</li>
+            <li>✅ <strong>Docker + HTTPS</strong> : Nginx, certificats et WebSocket sécurisés</li>
+            <li>✅ <strong>Base de données</strong> : SQLite conformément au sujet</li>
+            <li>✅ <strong>User Management</strong> : Auth JWT + profils + stats</li>
+            <li>✅ <strong>Pong</strong> : local, IA multi niveaux et remote WebSocket</li>
+            <li>✅ <strong>Tournois</strong> : saisie d’alias & bracket dynamique</li>
+            <li>✅ <strong>Live Chat</strong> : global, MP, blocages, invitations</li>
+            <li>✅ <strong>Jeu supplémentaire</strong> : Pierre-Feuille-Ciseaux avec matchmaking</li>
+            <li>✅ <strong>Blockchain</strong> : Scores signés sur Avalanche (testnet)</li>
           </ul>
         </div>
 
@@ -334,6 +425,324 @@ class Router {
     });
   }
 
+  private renderRemoteGamePage(focus: 'matchmaking' | 'manual'): void {
+    if (!authService.isAuthenticated()) {
+      this.navigateTo('/login');
+      return;
+    }
+
+    const content = document.getElementById('content');
+    if (!content) return;
+
+    content.innerHTML = `
+      <div class="game-page">
+        <h2>Multijoueur Pong en ligne</h2>
+        <p>Trouvez un adversaire via le matchmaking officiel ou rejoignez un salon en entrant le code partagé par un ami.</p>
+
+        <div class="remote-layout" style="display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+          <section id="remote-queue" class="card" style="${focus === 'matchmaking' ? 'border: 2px solid #00d4ff;' : ''}">
+            <h3>Matchmaking officiel</h3>
+            <p>Un salon sécurisé est créé automatiquement dès qu'un second joueur est disponible.</p>
+            <div id="queue-status" class="panel muted">Vous n'êtes pas dans la file.</div>
+            <div id="queue-match-found" style="display: none; margin-top: 1rem;">
+              <div id="queue-match-details" style="margin-bottom: 0.5rem;"></div>
+              <button id="start-remote-match" class="btn btn-success">Lancer la partie</button>
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
+              <button id="join-pong-queue" class="btn btn-primary">Rejoindre la file</button>
+              <button id="cancel-pong-queue" class="btn btn-secondary" disabled>Quitter</button>
+            </div>
+          </section>
+
+          <section id="remote-manual" class="card" style="${focus === 'manual' ? 'border: 2px solid #00d4ff;' : ''}">
+            <h3>Rejoindre via code d'invitation</h3>
+            <form id="remote-room-form" class="auth-form" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <input type="text" id="remote-room-code" placeholder="Code de la salle (ex: ABC123)" style="flex: 1; min-width: 180px;" required />
+              <button type="submit" class="btn btn-primary">Rejoindre</button>
+            </form>
+            <p style="margin-top: 0.5rem; color: #888;">Vous recevez ce code lorsqu'un ami vous invite via le chat.</p>
+          </section>
+        </div>
+
+        <section id="remote-game-section" class="card" style="margin-top: 2rem; display: none;">
+          <h3>Salon de jeu</h3>
+          <div id="remote-game-info" class="panel muted">Aucun salon actif.</div>
+          <canvas id="remotePongCanvas" width="800" height="500" style="border: 2px solid #00d4ff; background: #000; border-radius: 8px; margin-top: 1rem;"></canvas>
+          <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+            <button id="leave-remote-game" class="btn btn-secondary">Quitter la partie</button>
+          </div>
+        </section>
+      </div>
+    `;
+
+    this.setupRemoteGameHandlers();
+
+    if (focus === 'manual' && this.pendingInviteRoomCode) {
+      const input = document.getElementById('remote-room-code') as HTMLInputElement | null;
+      if (input) {
+        input.value = this.pendingInviteRoomCode;
+        this.launchRemoteGame(this.pendingInviteRoomCode);
+        this.pendingInviteRoomCode = null;
+      }
+    } else if (this.pendingInviteRoomCode) {
+      // Focus sur matchmaking mais un code est disponible
+      this.launchRemoteGame(this.pendingInviteRoomCode);
+      this.pendingInviteRoomCode = null;
+    }
+  }
+
+  private setupRemoteGameHandlers(): void {
+    document.getElementById('join-pong-queue')?.addEventListener('click', () => {
+      void this.joinPongMatchmakingQueue();
+    });
+
+    document.getElementById('cancel-pong-queue')?.addEventListener('click', () => {
+      void this.leavePongMatchmakingQueue();
+    });
+
+    document.getElementById('start-remote-match')?.addEventListener('click', () => {
+      if (this.remoteMatchInfo) {
+        this.launchRemoteGame(this.remoteMatchInfo.roomCode);
+      }
+    });
+
+    const roomForm = document.getElementById('remote-room-form') as HTMLFormElement | null;
+    const roomInput = document.getElementById('remote-room-code') as HTMLInputElement | null;
+    roomForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!roomInput) return;
+      const code = roomInput.value.trim();
+      if (!code) return;
+      this.launchRemoteGame(code);
+    });
+
+    document.getElementById('leave-remote-game')?.addEventListener('click', () => {
+      this.stopRemoteGame();
+    });
+  }
+
+  private async joinPongMatchmakingQueue(): Promise<void> {
+    if (this.isInPongQueue) {
+      this.renderQueueState('waiting', 'Déjà dans la file...');
+      return;
+    }
+
+    try {
+      const result = await this.apiRequest('/pong/matchmaking/join/', {
+        method: 'POST',
+      });
+
+      this.isInPongQueue = true;
+      this.renderQueueState('waiting', 'Recherche d’un adversaire...');
+
+      if (result.status === 'matched') {
+        this.isInPongQueue = false;
+        this.remoteMatchInfo = {
+          roomCode: result.room_code,
+          matchId: result.match_id,
+          opponent: result.opponent,
+        };
+        this.showMatchFound();
+        return;
+      }
+
+      this.startPongMatchmakingPolling();
+    } catch (error) {
+      this.renderQueueState('error', (error as Error).message);
+    }
+  }
+
+  private startPongMatchmakingPolling(): void {
+    if (this.pongMatchmakingInterval !== null) {
+      clearInterval(this.pongMatchmakingInterval);
+    }
+
+    this.pongMatchmakingInterval = window.setInterval(async () => {
+      try {
+        const status = await this.apiRequest('/pong/matchmaking/status/');
+        if (status.status === 'matched') {
+          if (this.pongMatchmakingInterval !== null) {
+            clearInterval(this.pongMatchmakingInterval);
+            this.pongMatchmakingInterval = null;
+          }
+          this.isInPongQueue = false;
+          this.remoteMatchInfo = {
+            roomCode: status.room_code,
+            matchId: status.match_id,
+            opponent: status.opponent,
+          };
+          this.showMatchFound();
+        }
+      } catch (error) {
+        console.error('Matchmaking polling error:', error);
+        if (this.pongMatchmakingInterval !== null) {
+          clearInterval(this.pongMatchmakingInterval);
+          this.pongMatchmakingInterval = null;
+        }
+        this.renderQueueState('error', 'Perte de connexion au matchmaking.');
+      }
+    }, 2500);
+  }
+
+  private async leavePongMatchmakingQueue(silent: boolean = false): Promise<void> {
+    if (!this.isInPongQueue) {
+      if (!silent) {
+        this.renderQueueState('idle', 'Vous n’êtes pas dans la file.');
+      }
+      return;
+    }
+
+    try {
+      await this.apiRequest('/pong/matchmaking/leave/', {
+        method: 'POST',
+      });
+    } catch (error) {
+      if (!silent) {
+        this.renderQueueState('error', (error as Error).message);
+      }
+      return;
+    } finally {
+      this.isInPongQueue = false;
+      if (this.pongMatchmakingInterval !== null) {
+        clearInterval(this.pongMatchmakingInterval);
+        this.pongMatchmakingInterval = null;
+      }
+    }
+
+    if (!silent) {
+      this.renderQueueState('idle', 'Vous avez quitté la file.');
+    } else {
+      this.renderQueueState('idle');
+    }
+  }
+
+  private showMatchFound(): void {
+    const panel = document.getElementById('queue-match-found');
+    const details = document.getElementById('queue-match-details');
+    const opponentName =
+      this.remoteMatchInfo?.opponent?.display_name ||
+      this.remoteMatchInfo?.opponent?.username ||
+      'Adversaire inconnu';
+
+    if (details && this.remoteMatchInfo) {
+      details.innerHTML = `
+        <p>Adversaire : <strong>${opponentName}</strong></p>
+        <p>Code de salon : <code>${this.remoteMatchInfo.roomCode}</code></p>
+      `;
+    }
+
+    if (panel) {
+      panel.style.display = 'block';
+    }
+
+    this.renderQueueState('matched', 'Salon créé ! Lancez la partie quand vous êtes prêts.');
+  }
+
+  private renderQueueState(state: 'idle' | 'waiting' | 'matched' | 'error', message?: string): void {
+    const statusBox = document.getElementById('queue-status');
+    const joinBtn = document.getElementById('join-pong-queue') as HTMLButtonElement | null;
+    const cancelBtn = document.getElementById('cancel-pong-queue') as HTMLButtonElement | null;
+
+    if (statusBox) {
+      let color = '#00d4ff';
+      if (state === 'waiting') color = '#ffaa00';
+      if (state === 'matched') color = '#4caf50';
+      if (state === 'error') color = '#ff4d4f';
+
+      statusBox.textContent =
+        message ||
+        (state === 'idle'
+          ? 'Vous n’êtes pas dans la file.'
+          : state === 'waiting'
+            ? 'Recherche d’un adversaire...'
+            : state === 'matched'
+              ? 'Salon prêt.'
+              : 'Une erreur est survenue.');
+      statusBox.setAttribute('style', `color: ${color};`);
+    }
+
+    if (joinBtn) {
+      joinBtn.disabled = state === 'waiting' || state === 'matched';
+    }
+
+    if (cancelBtn) {
+      cancelBtn.disabled = !this.isInPongQueue;
+    }
+
+    if (state !== 'matched') {
+      const panel = document.getElementById('queue-match-found');
+      if (panel) panel.style.display = 'none';
+    }
+  }
+
+  private launchRemoteGame(roomCode: string): void {
+    const normalized = roomCode.trim();
+    if (!normalized) {
+      this.renderQueueState('error', 'Code de salle invalide.');
+      return;
+    }
+
+    const section = document.getElementById('remote-game-section');
+    const infoBox = document.getElementById('remote-game-info');
+    const canvas = document.getElementById('remotePongCanvas') as HTMLCanvasElement | null;
+
+    if (!section || !infoBox || !canvas) return;
+
+    section.style.display = 'block';
+    infoBox.textContent = `Connexion au salon ${normalized}...`;
+
+    if (this.currentPongGame) {
+      if (this.currentPongGame.destroy) {
+        this.currentPongGame.destroy();
+      } else if (this.currentPongGame.stop) {
+        this.currentPongGame.stop();
+      }
+      this.currentPongGame = null;
+    }
+
+    this.currentPongGame = new RemotePongGame(canvas.id, {
+      roomCode: normalized,
+      onConnectionEstablished: (playerNumber, isHost) => {
+        infoBox.textContent = `Connecté en tant que joueur ${playerNumber} (${isHost ? 'hôte' : 'invité'}). En attente d'un adversaire...`;
+      },
+      onPlayerJoined: (displayName) => {
+        infoBox.textContent = `Adversaire connecté : ${displayName}. La partie démarre dès que les deux joueurs sont prêts.`;
+      },
+      onMatchReady: () => {
+        infoBox.textContent = 'Match prêt ! Préparez-vous.';
+      },
+      onOpponentDisconnect: () => {
+        infoBox.textContent = 'Votre adversaire s’est déconnecté.';
+      },
+      onGameOver: (result) => {
+        infoBox.textContent = `Partie terminée. Gagnant : ${result.winner}`;
+      },
+    });
+  }
+
+  private stopRemoteGame(): void {
+    const section = document.getElementById('remote-game-section');
+    const infoBox = document.getElementById('remote-game-info');
+
+    if (this.currentPongGame) {
+      if (this.currentPongGame.destroy) {
+        this.currentPongGame.destroy();
+      } else if (this.currentPongGame.stop) {
+        this.currentPongGame.stop();
+      }
+      this.currentPongGame = null;
+    }
+
+    if (section) {
+      section.style.display = 'none';
+    }
+
+    if (infoBox) {
+      infoBox.textContent = 'Aucun salon actif.';
+    }
+  }
+
+
   private startPongGame(mode: 'vs_local' | '2p_local' | 'vs_ai' | '2p_remote', difficulty?: 'easy' | 'medium' | 'hard'): void {
     // Hide mode selector, show game
     (document.querySelector('.game-mode-selector') as HTMLElement)!.style.display = 'none';
@@ -357,27 +766,11 @@ class Router {
   }
 
   private pongMatchmakingPage(): void {
-    const content = document.getElementById('content');
-    if (!content) return;
-
-    content.innerHTML = `
-      <div class="game-page">
-        <h2>Matchmaking Pong</h2>
-        <p>Chargement...</p>
-      </div>
-    `;
+    this.renderRemoteGamePage('matchmaking');
   }
 
   private pongRemotePage(): void {
-    const content = document.getElementById('content');
-    if (!content) return;
-
-    content.innerHTML = `
-      <div class="game-page">
-        <h2>Pong Remote</h2>
-        <p>Chargement...</p>
-      </div>
-    `;
+    this.renderRemoteGamePage('manual');
   }
 
   private rpsPage(): void {
@@ -661,78 +1054,487 @@ class Router {
 
     content.innerHTML = `
       <div class="chat-page">
-        <h2>💬 Chat en direct</h2>
-        <p>Bienvenue ${user?.display_name || user?.username} !</p>
-
-        <div class="chat-container" style="display: grid; grid-template-columns: 1fr 250px; gap: 1rem; margin-top: 2rem;">
-          <!-- Messages area -->
-          <div class="chat-main">
-            <div class="chat-messages" id="chat-messages" style="
-              height: 400px;
-              overflow-y: auto;
-              background: rgba(0, 0, 0, 0.3);
-              border: 1px solid rgba(0, 212, 255, 0.3);
-              border-radius: 8px;
-              padding: 1rem;
-              margin-bottom: 1rem;
-            ">
-              <!-- Messages will appear here -->
-            </div>
-
-            <form id="chat-form" class="chat-form" style="display: flex; gap: 0.5rem;">
-              <input
-                type="text"
-                id="chat-input"
-                placeholder="Tapez votre message..."
-                autocomplete="off"
-                style="
-                  flex: 1;
-                  padding: 0.75rem;
-                  background: rgba(0, 0, 0, 0.5);
-                  border: 1px solid rgba(0, 212, 255, 0.5);
-                  border-radius: 4px;
-                  color: #fff;
-                "
-              />
-              <button type="submit" class="btn btn-primary">Envoyer</button>
-            </form>
-          </div>
-
-          <!-- Users list -->
-          <div class="chat-sidebar">
-            <h3 style="margin-top: 0;">Utilisateurs en ligne</h3>
-            <ul id="chat-users" style="
-              list-style: none;
-              padding: 0;
-              background: rgba(0, 0, 0, 0.3);
-              border: 1px solid rgba(0, 212, 255, 0.3);
-              border-radius: 8px;
-              max-height: 400px;
-              overflow-y: auto;
-            ">
-              <li style="padding: 0.5rem; color: #888;">Chargement...</li>
-            </ul>
-          </div>
+        <div class="chat-header">
+          <h2>💬 Espace de discussion</h2>
+          <p>Bienvenue ${user?.display_name || user?.username}. Discutez globalement, envoyez des messages privés, bloquez des utilisateurs ou invitez vos amis à un Pong.</p>
         </div>
 
-        <div style="margin-top: 2rem;">
-          <p style="color: #888; font-size: 0.9rem;">
-            ℹ️ Les messages sont envoyés en temps réel via WebSocket sécurisé (WSS)
-          </p>
+        <div class="chat-layout" style="display: grid; grid-template-columns: 280px 1fr; gap: 1.5rem;">
+          <aside class="chat-sidebar" style="display: flex; flex-direction: column; gap: 1rem;">
+            <div class="sidebar-block">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>Conversations</h3>
+                <button id="chat-refresh" class="btn btn-secondary btn-small">↻</button>
+              </div>
+              <div id="chat-conversations" class="list-panel muted">Chargement...</div>
+            </div>
+
+            <div class="sidebar-block">
+              <h3>Amis</h3>
+              <div id="chat-friends" class="list-panel muted">Chargement...</div>
+            </div>
+
+            <div class="sidebar-block">
+              <h3>Bloqués</h3>
+              <div id="chat-blocked" class="list-panel muted">Chargement...</div>
+            </div>
+          </aside>
+
+          <section class="chat-main">
+            <div class="chat-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+              <button data-chat-tab="global" class="btn btn-secondary active">Chat global</button>
+              <button data-chat-tab="direct" class="btn btn-secondary">Messages privés</button>
+              <button data-chat-tab="notifications" class="btn btn-secondary">Notifications</button>
+            </div>
+
+            <div id="chat-panel-global" class="chat-panel">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 1rem;">
+                <div>
+                  <div class="chat-messages" id="chat-global-messages" style="height: 360px;"></div>
+                  <form id="chat-global-form" class="chat-form" style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                    <input type="text" id="chat-global-input" placeholder="Tapez votre message..." autocomplete="off" style="flex: 1;" />
+                    <button type="submit" class="btn btn-primary">Envoyer</button>
+                  </form>
+                </div>
+                <div class="chat-users-panel">
+                  <h4>Utilisateurs connectés</h4>
+                  <ul id="chat-global-users" class="user-list" style="max-height: 360px; overflow-y: auto;">
+                    <li style="color: #888;">Connexion en cours...</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div id="chat-panel-direct" class="chat-panel" style="display: none;">
+              <div id="chat-direct-header" class="panel muted">Sélectionnez un contact pour commencer une conversation.</div>
+              <div class="chat-messages" id="chat-direct-messages" style="height: 320px; margin-top: 1rem;"></div>
+              <form id="chat-direct-form" style="margin-top: 0.75rem;">
+                <textarea id="chat-direct-input" rows="3" placeholder="Votre message..." style="width: 100%;"></textarea>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                  <button type="submit" class="btn btn-primary">Envoyer</button>
+                  <button type="button" id="chat-direct-invite" class="btn btn-secondary" disabled>Inviter à jouer</button>
+                  <button type="button" id="chat-direct-block" class="btn btn-secondary" disabled>Bloquer</button>
+                </div>
+              </form>
+            </div>
+
+            <div id="chat-panel-notifications" class="chat-panel" style="display: none;">
+              <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
+                <button id="chat-notifications-markall" class="btn btn-secondary">Tout marquer comme lu</button>
+              </div>
+              <div id="chat-notifications-list" class="list-panel muted">Chargement...</div>
+            </div>
+          </section>
         </div>
       </div>
     `;
 
-    // Initialize chat client
-    this.initChatClient();
+    this.initGlobalChat();
+    this.setupChatEvents();
+    void this.loadChatSidebarData();
+    void this.loadChatNotifications();
   }
 
-  private initChatClient(): void {
-    // Create new chat client instance
+  private initGlobalChat(): void {
     this.currentChatClient = new ChatClient();
+    this.currentChatClient.init('chat-global-messages', 'chat-global-input', 'chat-global-users');
+  }
 
-    // Initialize with DOM element IDs
-    this.currentChatClient.init('chat-messages', 'chat-input', 'chat-users');
+  private setupChatEvents(): void {
+    document.getElementById('chat-refresh')?.addEventListener('click', () => {
+      void this.loadChatSidebarData();
+      void this.loadChatNotifications();
+    });
+
+    document.querySelectorAll<HTMLButtonElement>('[data-chat-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const tab = button.getAttribute('data-chat-tab') as 'global' | 'direct' | 'notifications';
+        this.switchChatTab(tab);
+      });
+    });
+
+    const directForm = document.getElementById('chat-direct-form') as HTMLFormElement | null;
+    const directInput = document.getElementById('chat-direct-input') as HTMLTextAreaElement | null;
+    directForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!this.activeConversationUserId || !directInput) return;
+      const message = directInput.value.trim();
+      if (!message) return;
+
+      try {
+        await sendDirectMessage({
+          recipientId: this.activeConversationUserId,
+          content: message,
+        });
+        directInput.value = '';
+        await this.selectConversation(this.activeConversationUserId, this.activeConversationDisplayName || 'Utilisateur');
+      } catch (error) {
+        alert((error as Error).message);
+      }
+    });
+
+    document.getElementById('chat-direct-invite')?.addEventListener('click', () => {
+      if (this.activeConversationUserId) {
+        void this.inviteUserToPong(this.activeConversationUserId);
+      }
+    });
+
+    document.getElementById('chat-direct-block')?.addEventListener('click', () => {
+      if (!this.activeConversationUserId) return;
+      if (this.blockedUserIds.has(this.activeConversationUserId)) {
+        void this.unblockUserFromChat(this.activeConversationUserId);
+      } else {
+        void this.blockUserFromChat(this.activeConversationUserId);
+      }
+    });
+
+    document.getElementById('chat-direct-messages')?.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      if (target && target.hasAttribute('data-join-room')) {
+        const code = target.getAttribute('data-join-room');
+        if (code) {
+          this.handleJoinRoomFromChat(code);
+        }
+      }
+    });
+
+    document.getElementById('chat-notifications-markall')?.addEventListener('click', async () => {
+      try {
+        await markAllNotificationsRead();
+        await this.loadChatNotifications();
+      } catch (error) {
+        alert((error as Error).message);
+      }
+    });
+  }
+
+  private switchChatTab(tab: 'global' | 'direct' | 'notifications'): void {
+    const panels: Record<string, HTMLElement | null> = {
+      global: document.getElementById('chat-panel-global'),
+      direct: document.getElementById('chat-panel-direct'),
+      notifications: document.getElementById('chat-panel-notifications'),
+    };
+
+    Object.entries(panels).forEach(([key, panel]) => {
+      if (panel) panel.style.display = key === tab ? 'block' : 'none';
+    });
+
+    document.querySelectorAll<HTMLButtonElement>('[data-chat-tab]').forEach((button) => {
+      button.classList.toggle('active', button.getAttribute('data-chat-tab') === tab);
+    });
+  }
+
+  private async loadChatSidebarData(): Promise<void> {
+    const conversationsContainer = document.getElementById('chat-conversations');
+    const friendsContainer = document.getElementById('chat-friends');
+    const blockedContainer = document.getElementById('chat-blocked');
+
+    if (conversationsContainer) conversationsContainer.textContent = 'Chargement...';
+    if (friendsContainer) friendsContainer.textContent = 'Chargement...';
+    if (blockedContainer) blockedContainer.textContent = 'Chargement...';
+
+    try {
+      const [conversations, friends, blocked] = await Promise.all([
+        fetchConversations(),
+        authService.getFriends(),
+        authService.getBlockedUsers(),
+      ]);
+
+      this.blockedUserIds = new Set(blocked.map((user) => user.id));
+      this.renderConversationList(conversations || []);
+      this.renderFriendList(friends || []);
+      this.renderBlockedList(blocked || []);
+    } catch (error) {
+      if (conversationsContainer) {
+        conversationsContainer.textContent = `Erreur: ${(error as Error).message}`;
+      }
+    }
+  }
+
+  private renderConversationList(conversations: any[]): void {
+    const container = document.getElementById('chat-conversations');
+    if (!container) return;
+
+    if (!conversations.length) {
+      container.innerHTML = '<p style="color: #888;">Pas encore de messages privés.</p>';
+      return;
+    }
+
+    container.innerHTML = conversations
+      .map((conversation: any) => {
+        const userData = conversation.user as User;
+        const unreadCount = conversation.unread_count || 0;
+        const isActive = this.activeConversationUserId === userData.id;
+        const lastMessage = conversation.last_message ? this.sanitizeHTML(conversation.last_message.content) : 'Aucun message';
+
+        return `
+          <button class="conversation-item ${isActive ? 'active' : ''}" data-conversation-id="${userData.id}" style="display: block; width: 100%; text-align: left;">
+            <div style="display: flex; justify-content: space-between;">
+              <span>${this.sanitizeHTML(userData.display_name || userData.username)}</span>
+              ${unreadCount > 0 ? `<span class="badge">${unreadCount}</span>` : ''}
+            </div>
+            <small style="color: #888;">${lastMessage}</small>
+          </button>
+        `;
+      })
+      .join('');
+
+    container.querySelectorAll<HTMLButtonElement>('[data-conversation-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = Number(btn.getAttribute('data-conversation-id'));
+        const label = btn.querySelector('span')?.textContent || 'Utilisateur';
+        void this.selectConversation(id, label);
+      });
+    });
+  }
+
+  private renderFriendList(friends: User[]): void {
+    const container = document.getElementById('chat-friends');
+    if (!container) return;
+
+    if (!friends.length) {
+      container.innerHTML = '<p style="color: #888;">Aucun ami enregistré.</p>';
+      return;
+    }
+
+    container.innerHTML = friends
+      .map(
+        (friend) => `
+          <div class="friend-item" data-user-id="${friend.id}" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+            <span>${this.sanitizeHTML(friend.display_name || friend.username)}</span>
+            <button class="btn btn-secondary btn-small" data-start-conversation="${friend.id}">Discuter</button>
+          </div>
+        `
+      )
+      .join('');
+
+    container.querySelectorAll<HTMLButtonElement>('[data-start-conversation]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = Number(btn.getAttribute('data-start-conversation'));
+        const label = btn.closest('.friend-item')?.querySelector('span')?.textContent || 'Utilisateur';
+        void this.selectConversation(id, label);
+      });
+    });
+  }
+
+  private renderBlockedList(blocked: User[]): void {
+    const container = document.getElementById('chat-blocked');
+    if (!container) return;
+
+    if (!blocked.length) {
+      container.innerHTML = '<p style="color: #888;">Aucun utilisateur bloqué.</p>';
+      return;
+    }
+
+    container.innerHTML = blocked
+      .map(
+        (user) => `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+            <span>${this.sanitizeHTML(user.display_name || user.username)}</span>
+            <button class="btn btn-secondary btn-small" data-unblock-user="${user.id}">Débloquer</button>
+          </div>
+        `
+      )
+      .join('');
+
+    container.querySelectorAll<HTMLButtonElement>('[data-unblock-user]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = Number(btn.getAttribute('data-unblock-user'));
+        void this.unblockUserFromChat(id);
+      });
+    });
+  }
+
+  private async selectConversation(userId: number, label: string): Promise<void> {
+    this.activeConversationUserId = userId;
+    this.activeConversationDisplayName = label;
+    this.switchChatTab('direct');
+    this.updateDirectPanelActions();
+
+    const header = document.getElementById('chat-direct-header');
+    if (header) {
+      header.innerHTML = `En conversation avec <strong>${this.sanitizeHTML(label)}</strong>`;
+    }
+
+    const messageContainer = document.getElementById('chat-direct-messages');
+    if (messageContainer) {
+      messageContainer.innerHTML = '<p style="color: #888;">Chargement des messages...</p>';
+    }
+
+    try {
+      const messages = await fetchDirectMessages(userId);
+      this.renderDirectMessages(messages || []);
+      await this.loadChatSidebarData();
+    } catch (error) {
+      if (messageContainer) {
+        messageContainer.innerHTML = `<p style="color: #ff4d4f;">${(error as Error).message}</p>`;
+      }
+    }
+  }
+
+  private updateDirectPanelActions(): void {
+    const inviteBtn = document.getElementById('chat-direct-invite') as HTMLButtonElement | null;
+    const blockBtn = document.getElementById('chat-direct-block') as HTMLButtonElement | null;
+    const directForm = document.getElementById('chat-direct-form') as HTMLFormElement | null;
+
+    const hasConversation = !!this.activeConversationUserId;
+    const isBlocked = !!this.activeConversationUserId && this.blockedUserIds.has(this.activeConversationUserId);
+
+    if (inviteBtn) inviteBtn.disabled = !hasConversation || isBlocked;
+    if (blockBtn) {
+      blockBtn.disabled = !hasConversation;
+      blockBtn.textContent = isBlocked ? 'Débloquer' : 'Bloquer';
+    }
+    if (directForm) {
+      directForm.classList.toggle('disabled', !hasConversation);
+    }
+  }
+
+  private renderDirectMessages(messages: any[]): void {
+    const container = document.getElementById('chat-direct-messages');
+    if (!container) return;
+
+    if (!messages.length) {
+      container.innerHTML = '<p style="color: #888;">Aucun message pour le moment.</p>';
+      return;
+    }
+
+    container.innerHTML = messages.map((message) => this.renderDirectMessage(message)).join('');
+    container.scrollTop = container.scrollHeight;
+  }
+
+  private renderDirectMessage(message: any): string {
+    const me = authService.currentUser;
+    const isOwn = me && message.sender && me.id === message.sender.id;
+    const senderName = isOwn ? 'Vous' : this.sanitizeHTML(message.sender?.display_name || message.sender?.username || 'Utilisateur');
+    const timestamp = new Date(message.timestamp).toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const baseContent = this.sanitizeHTML(message.content || '');
+
+    let extra = '';
+    if (message.message_type === 'game_invite' && message.game_room_code) {
+      extra = `
+        <div style="margin-top: 0.5rem;">
+          <span style="color: #00d4ff;">Invitation à une partie de Pong</span>
+          <button class="btn btn-primary btn-small" data-join-room="${message.game_room_code}" style="margin-left: 0.5rem;">Rejoindre le salon</button>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="direct-message ${isOwn ? 'me' : ''}" style="margin-bottom: 0.75rem;">
+        <div style="display: flex; justify-content: space-between;">
+          <strong>${senderName}</strong>
+          <span style="color: #888; font-size: 0.8rem;">${timestamp}</span>
+        </div>
+        <div>${baseContent}</div>
+        ${extra}
+      </div>
+    `;
+  }
+
+  private async loadChatNotifications(): Promise<void> {
+    const container = document.getElementById('chat-notifications-list');
+    if (!container) return;
+
+    container.textContent = 'Chargement...';
+
+    try {
+      const notifications = await fetchNotifications();
+      if (!notifications.length) {
+        container.innerHTML = '<p style="color: #888;">Aucune notification.</p>';
+        return;
+      }
+
+      container.innerHTML = notifications
+        .map(
+          (notification: any) => `
+            <div class="notification-item ${notification.is_read ? 'read' : ''}" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding: 0.5rem 0;">
+              <div style="display: flex; justify-content: space-between;">
+                <strong>${this.sanitizeHTML(notification.title)}</strong>
+                <small>${new Date(notification.created_at).toLocaleString('fr-FR')}</small>
+              </div>
+              <p>${this.sanitizeHTML(notification.content)}</p>
+              ${!notification.is_read ? `<button class="btn btn-secondary btn-small" data-notification-read="${notification.id}">Marquer comme lu</button>` : ''}
+            </div>
+          `
+        )
+        .join('');
+
+      container.querySelectorAll<HTMLButtonElement>('[data-notification-read]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const id = Number(button.getAttribute('data-notification-read'));
+          await markNotificationRead(id);
+          await this.loadChatNotifications();
+        });
+      });
+    } catch (error) {
+      container.textContent = `Erreur: ${(error as Error).message}`;
+    }
+  }
+
+  private async inviteUserToPong(userId: number): Promise<void> {
+    try {
+      const match = await this.apiRequest('/pong/matches/create/', {
+        method: 'POST',
+        body: JSON.stringify({
+          player2_id: userId,
+          game_mode: '2p_remote',
+        }),
+      });
+
+      const room = await this.apiRequest('/pong/rooms/create/', {
+        method: 'POST',
+        body: JSON.stringify({
+          match_id: match.id,
+        }),
+      });
+
+      await sendDirectMessage({
+        recipientId: userId,
+        content: 'Je t’invite pour un match de Pong !',
+        messageType: 'game_invite',
+        gameInviteType: 'pong',
+        gameRoomCode: room.room_code,
+      });
+
+      alert('Invitation envoyée ! Votre ami reçoit le code du salon dans la conversation.');
+    } catch (error) {
+      alert((error as Error).message);
+    }
+  }
+
+  private async blockUserFromChat(userId: number): Promise<void> {
+    try {
+      await authService.blockUser(userId);
+      this.blockedUserIds.add(userId);
+      await this.loadChatSidebarData();
+      this.updateDirectPanelActions();
+      alert('Utilisateur bloqué.');
+    } catch (error) {
+      alert((error as Error).message);
+    }
+  }
+
+  private async unblockUserFromChat(userId: number): Promise<void> {
+    try {
+      await authService.unblockUser(userId);
+      this.blockedUserIds.delete(userId);
+      await this.loadChatSidebarData();
+      this.updateDirectPanelActions();
+    } catch (error) {
+      alert((error as Error).message);
+    }
+  }
+
+  private handleJoinRoomFromChat(roomCode: string): void {
+    this.pendingInviteRoomCode = roomCode;
+    this.navigateTo('/game/pong/remote');
+  }
+
+  private sanitizeHTML(text: string = ''): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   private profilePage(): void {
@@ -769,12 +1571,265 @@ class Router {
     const content = document.getElementById('content');
     if (!content) return;
 
+    const defaultAlias = authService.currentUser?.display_name || authService.currentUser?.username || '';
+
     content.innerHTML = `
       <div class="tournament-page">
-        <h2>Tournoi</h2>
-        <p>Chargement...</p>
+        <h2>Organisation d'un tournoi Pong</h2>
+        <p>Ajoutez des joueurs en saisissant leur alias, générez un bracket et suivez l'avancement des matchs.</p>
+
+        <div class="tournament-layout" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+          <section class="card">
+            <h3>Inscription des joueurs</h3>
+            <form id="tournament-alias-form" class="auth-form" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <input type="text" id="alias-input" placeholder="Alias du joueur" value="${defaultAlias}" style="flex: 1; min-width: 180px;" required />
+              <button type="submit" class="btn btn-primary">Ajouter</button>
+            </form>
+            <div id="tournament-message" class="notice" style="display: none; margin-top: 0.5rem;"></div>
+            <ul id="tournament-participants" class="participant-list" style="margin-top: 1rem; list-style: none; padding: 0;"></ul>
+            <div style="display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
+              <button id="start-tournament" class="btn btn-success">Générer le bracket</button>
+              <button id="reset-tournament" class="btn btn-secondary">Réinitialiser</button>
+            </div>
+          </section>
+
+          <section class="card">
+            <h3>Suivi en direct</h3>
+            <div id="tournament-next-match" class="panel muted">Ajoutez au moins deux joueurs pour lancer un match.</div>
+            <div id="tournament-winner" class="panel success" style="display: none; margin-top: 1rem;"></div>
+          </section>
+        </div>
+
+        <section class="card" style="margin-top: 2rem;">
+          <h3>Bracket</h3>
+          <div id="tournament-bracket" class="bracket-grid"></div>
+        </section>
       </div>
     `;
+
+    this.bindTournamentEvents();
+    this.updateTournamentUI();
+  }
+
+  private bindTournamentEvents(): void {
+    const form = document.getElementById('tournament-alias-form') as HTMLFormElement | null;
+    const aliasInput = document.getElementById('alias-input') as HTMLInputElement | null;
+
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!aliasInput) return;
+
+      const alias = aliasInput.value.trim();
+      if (!alias) {
+        this.displayTournamentMessage('Veuillez saisir un alias.', 'error');
+        return;
+      }
+
+      try {
+        tournamentManager.registerPlayer(alias);
+        aliasInput.value = '';
+        this.displayTournamentMessage(`${alias} rejoint la compétition.`, 'success');
+        this.updateTournamentUI();
+      } catch (error) {
+        this.displayTournamentMessage((error as Error).message, 'error');
+      }
+    });
+
+    document.getElementById('start-tournament')?.addEventListener('click', () => {
+      const participants = tournamentManager.getParticipants();
+      if (participants.length < 2) {
+        this.displayTournamentMessage('Deux joueurs minimum sont requis.', 'error');
+        return;
+      }
+
+      if (tournamentManager.hasStarted()) {
+        this.displayTournamentMessage('Un bracket est déjà en cours. Réinitialisez avant de régénérer.', 'error');
+        return;
+      }
+
+      tournamentManager.startTournament();
+      this.displayTournamentMessage('Bracket généré ! Bonne chance aux joueurs.', 'success');
+      this.updateTournamentUI();
+    });
+
+    document.getElementById('reset-tournament')?.addEventListener('click', () => {
+      tournamentManager.reset();
+      this.displayTournamentMessage('Tournoi réinitialisé.', 'info');
+      this.updateTournamentUI();
+    });
+  }
+
+  private displayTournamentMessage(message: string, type: 'info' | 'success' | 'error' = 'info'): void {
+    const box = document.getElementById('tournament-message');
+    if (!box) return;
+
+    let color = '#00d4ff';
+    if (type === 'error') color = '#ff4d4f';
+    if (type === 'success') color = '#4caf50';
+
+    box.textContent = message;
+    box.setAttribute('style', `display: block; color: ${color}; font-weight: bold; margin-top: 0.5rem;`);
+  }
+
+  private updateTournamentUI(): void {
+    this.renderParticipantList();
+    this.renderTournamentBracket();
+    this.renderTournamentStatus();
+  }
+
+  private renderParticipantList(): void {
+    const container = document.getElementById('tournament-participants');
+    const participants = tournamentManager.getParticipants() as LocalParticipant[];
+    const startBtn = document.getElementById('start-tournament') as HTMLButtonElement | null;
+
+    if (!container) return;
+
+    if (!participants.length) {
+      container.innerHTML = '<li style="color: #888;">Aucun joueur inscrit pour le moment.</li>';
+    } else {
+      container.innerHTML = participants
+        .map(
+          (participant) => `
+            <li style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+              <span>${participant.alias}</span>
+              <button class="btn btn-secondary" data-remove-player="${participant.id}" aria-label="Retirer ${participant.alias}">✖</button>
+            </li>
+          `
+        )
+        .join('');
+    }
+
+    container.querySelectorAll<HTMLButtonElement>('[data-remove-player]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = Number(btn.getAttribute('data-remove-player'));
+        tournamentManager.removePlayer(id);
+        this.displayTournamentMessage('Joueur retiré du tournoi.', 'info');
+        this.updateTournamentUI();
+      });
+    });
+
+    if (startBtn) {
+      startBtn.disabled = participants.length < 2 || tournamentManager.hasStarted();
+    }
+  }
+
+  private renderTournamentBracket(): void {
+    const container = document.getElementById('tournament-bracket');
+    if (!container) return;
+
+    const matches = tournamentManager.getAllMatches() as LocalTournamentMatch[];
+
+    if (!matches.length) {
+      container.innerHTML = '<p style="color: #888;">Ajoutez des joueurs puis générez le bracket pour visualiser les rencontres.</p>';
+      return;
+    }
+
+    const rounds = new Map<number, LocalTournamentMatch[]>();
+    matches.forEach((match) => {
+      const list = rounds.get(match.round) || [];
+      list.push(match);
+      rounds.set(match.round, list);
+    });
+
+    const html = Array.from(rounds.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([round, roundMatches]) => {
+        const matchesHtml = roundMatches
+          .map((match) => this.renderMatchCard(match))
+          .join('');
+        return `
+          <div class="bracket-round">
+            <h4>Round ${round}</h4>
+            ${matchesHtml}
+          </div>
+        `;
+      })
+      .join('');
+
+    container.innerHTML = `<div class="bracket-rounds" style="display: grid; gap: 1rem;">${html}</div>`;
+
+    container.querySelectorAll<HTMLButtonElement>('[data-complete-match]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const matchId = Number(btn.getAttribute('data-match-id'));
+        const winnerId = Number(btn.getAttribute('data-winner-id'));
+        this.finishTournamentMatch(matchId, winnerId);
+      });
+    });
+  }
+
+  private renderMatchCard(match: LocalTournamentMatch): string {
+    const player1 = match.player1 ? match.player1.alias : '???';
+    const player2 = match.player2 ? match.player2.alias : '???';
+    const winner = match.winner ? match.winner.alias : null;
+    const isBye = match.status === 'bye';
+
+    const controls =
+      match.status === 'pending' && match.player2
+        ? `
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button class="btn btn-primary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player1.id}">${player1} gagne</button>
+            <button class="btn btn-primary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player2.id}">${player2} gagne</button>
+          </div>
+        `
+        : '';
+
+    const status =
+      winner
+        ? `<span style="color: #4caf50;">Vainqueur: ${winner}</span>`
+        : isBye
+          ? `<span style="color: #ffaa00;">${player1} passe automatiquement au tour suivant</span>`
+          : `<span style="color: #888;">En attente de résultat</span>`;
+
+    return `
+      <div class="match-card" style="border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 0.75rem;">
+        <div style="display: flex; justify-content: space-between;">
+          <strong>${player1}</strong>
+          <span style="color: #00d4ff;">VS</span>
+          <strong>${player2}</strong>
+        </div>
+        <div style="margin-top: 0.5rem;">${status}</div>
+        ${controls}
+      </div>
+    `;
+  }
+
+  private finishTournamentMatch(matchId: number, winnerId: number): void {
+    try {
+      tournamentManager.completeMatch(matchId, winnerId);
+      this.displayTournamentMessage('Match mis à jour.', 'success');
+      this.updateTournamentUI();
+    } catch (error) {
+      this.displayTournamentMessage((error as Error).message, 'error');
+    }
+  }
+
+  private renderTournamentStatus(): void {
+    const nextMatchBox = document.getElementById('tournament-next-match');
+    const winnerBox = document.getElementById('tournament-winner');
+
+    if (!nextMatchBox || !winnerBox) return;
+
+    const winner = tournamentManager.getWinner();
+    if (winner) {
+      nextMatchBox.textContent = 'Tous les matchs sont terminés.';
+      winnerBox.style.display = 'block';
+      winnerBox.textContent = `🏆 Champion : ${winner.alias}`;
+      return;
+    }
+
+    winnerBox.style.display = 'none';
+
+    const nextMatch = tournamentManager.getNextMatch() as LocalTournamentMatch | undefined;
+    if (!nextMatch) {
+      nextMatchBox.textContent = 'Aucun match planifié. Lancez le tournoi pour commencer.';
+      return;
+    }
+
+    if (!nextMatch.player2) {
+      nextMatchBox.textContent = `${nextMatch.player1.alias} bénéficie d'un passage automatique au prochain tour.`;
+    } else {
+      nextMatchBox.textContent = `Prochaine rencontre : ${nextMatch.player1.alias} vs ${nextMatch.player2.alias}`;
+    }
   }
 
   private notFound(): void {

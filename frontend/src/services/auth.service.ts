@@ -209,7 +209,8 @@ export class AuthService {
       throw new Error('Failed to get friends list');
     }
 
-    return (await response.json()) as User[];
+    const friendships = (await response.json()) as Array<{ friend: User }>;
+    return friendships.map((entry) => entry.friend);
   }
 
   public async addFriend(userId: number): Promise<{ message: string }> {
@@ -268,6 +269,58 @@ export class AuthService {
       Authorization: `Bearer ${this.accessToken}`,
       'Content-Type': 'application/json',
     };
+  }
+
+  public getAccessToken(): string | null {
+    return this.accessToken;
+  }
+
+  public async getBlockedUsers(): Promise<User[]> {
+    const response = await fetch(`${this.baseURL}/users/blocked/`, {
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get blocked users');
+    }
+
+    const blocked = (await response.json()) as Array<{ blocked: User }>;
+    return blocked.map((entry) => entry.blocked);
+  }
+
+  public async blockUser(userId: number): Promise<{ message: string }> {
+    const response = await fetch(`${this.baseURL}/users/block/${userId}/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to block user');
+    }
+
+    return await response.json();
+  }
+
+  public async unblockUser(userId: number): Promise<{ message: string }> {
+    const response = await fetch(`${this.baseURL}/users/unblock/${userId}/`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to unblock user');
+    }
+
+    return await response.json();
   }
 }
 

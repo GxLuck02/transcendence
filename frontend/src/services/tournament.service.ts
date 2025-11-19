@@ -205,6 +205,10 @@ export class TournamentManager {
     return this.currentRound;
   }
 
+  public hasStarted(): boolean {
+    return this.matches.length > 0;
+  }
+
   public reset(): void {
     this.participants = [];
     this.matches = [];
