@@ -5,14 +5,23 @@
 import { authService } from './auth.service';
 
 interface ChatWSMessage {
-  type: 'connection_established' | 'message' | 'user_joined' | 'user_left' | 'error';
+  type: 'authenticated' | 'auth_error' | 'global_message' | 'user_list' | 'user_typing' | 'error' | 'connection_established' | 'message' | 'user_joined' | 'user_left';
   message?: string;
   username?: string;
+  user?: { id: number; username: string; display_name: string };
+  users?: Array<{ id: number; username: string; display_name: string }>;
+  sender?: { id: number; username: string; display_name: string };
+  content?: string;
+  timestamp?: string;
+  isTyping?: boolean;
 }
 
 interface ChatOutgoingMessage {
-  type: 'message';
-  message: string;
+  type: 'authenticate' | 'global_message' | 'typing';
+  token?: string;
+  message?: string;
+  content?: string;
+  isTyping?: boolean;
 }
 
 type MessageType = 'info' | 'error' | 'warning';
@@ -39,7 +48,19 @@ export class ChatClient {
       this.socket.onopen = () => {
         console.log('✅ Chat WebSocket connected');
         this.connected = true;
-        this.showSystemMessage('Connecté au chat');
+
+        // Send JWT authentication
+        const token = authService.getAccessToken();
+        if (token && this.socket) {
+          this.socket.send(JSON.stringify({
+            type: 'authenticate',
+            token: token
+          }));
+          console.log('Sent authentication token');
+        } else {
+          console.error('No access token available for chat authentication');
+          this.showSystemMessage('Erreur: Non authentifié', 'error');
+        }
       };
 
       this.socket.onmessage = (event: MessageEvent) => {
@@ -73,6 +94,40 @@ export class ChatClient {
 
   private handleMessage(data: ChatWSMessage): void {
     switch (data.type) {
+      case 'authenticated':
+        console.log('✅ Authentication successful:', data.user);
+        this.showSystemMessage('Authentifié au chat');
+        break;
+
+      case 'auth_error':
+        console.error('❌ Authentication failed:', data.message);
+        this.showSystemMessage(`Erreur d'authentification: ${data.message || 'Token invalide'}`, 'error');
+        break;
+
+      case 'global_message':
+        if (data.sender && data.content) {
+          this.displayMessage(data.sender.display_name, data.content);
+        }
+        break;
+
+      case 'user_list':
+        if (data.users) {
+          this.connectedUsers.clear();
+          data.users.forEach(user => {
+            this.connectedUsers.add(user.display_name);
+          });
+          this.updateUserList();
+          console.log(`${data.users.length} utilisateurs en ligne`);
+        }
+        break;
+
+      case 'user_typing':
+        if (data.user && data.isTyping !== undefined) {
+          // Handle typing indicator (optional visual feedback)
+          console.log(`${data.user.display_name} is ${data.isTyping ? 'typing' : 'not typing'}`);
+        }
+        break;
+
       case 'connection_established':
         console.log('Connection confirmed:', data.message);
         break;
@@ -120,8 +175,8 @@ export class ChatClient {
 
     try {
       const outgoingMessage: ChatOutgoingMessage = {
-        type: 'message',
-        message: message.trim(),
+        type: 'global_message',
+        content: message.trim(),
       };
       this.socket.send(JSON.stringify(outgoingMessage));
       return true;

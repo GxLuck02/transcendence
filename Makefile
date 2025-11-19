@@ -14,7 +14,7 @@ help:
 	@echo "  $(YELLOW)make up$(NC)       - Start all services"
 	@echo "  $(YELLOW)make down$(NC)     - Stop all services"
 	@echo "  $(YELLOW)make logs$(NC)     - View logs"
-	@echo "  $(YELLOW)make shell$(NC)    - Django shell"
+	@echo "  $(YELLOW)make shell$(NC)    - API shell (Node.js)"
 	@echo "  $(YELLOW)make clean$(NC)    - Stop and remove containers"
 	@echo "  $(YELLOW)make fclean$(NC)   - Full clean (including volumes)"
 	@echo "  $(YELLOW)make re$(NC)       - Rebuild everything"
@@ -96,17 +96,5 @@ logs:
 	docker compose logs -f
 
 shell:
-	docker compose exec web python manage.py shell
-
-migrate:
-	docker compose exec web python manage.py makemigrations
-	docker compose exec web python manage.py migrate
-
-superuser:
-	docker compose exec web python manage.py createsuperuser
-
-test:
-	docker compose exec web python manage.py test
-
-collectstatic:
-	docker compose exec web python manage.py collectstatic --noinput
+	@echo "$(YELLOW)Opening Node.js shell in API container...$(NC)"
+	docker compose exec api node

@@ -67,6 +67,9 @@ class Router {
   }
 
   private init(): void {
+    // Handle OAuth callback tokens
+    this.handleOAuthCallback();
+
     // Handle link clicks
     document.addEventListener('click', (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -84,6 +87,62 @@ class Router {
 
     // Load initial route
     this.loadRoute();
+  }
+
+  private async handleOAuthCallback(): Promise<void> {
+    // Check for OAuth tokens in URL query parameters
+    const params = new URLSearchParams(window.location.search);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    if (accessToken && refreshToken) {
+      console.log('OAuth tokens detected, processing authentication...');
+
+      try {
+        // Save tokens using private method (we need to add a public method)
+        // For now, we'll save directly to localStorage
+        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem('refresh_token', refreshToken);
+
+        // Fetch current user info
+        const response = await fetch(`${this.apiBaseUrl}/users/me/`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+
+        if (response.ok) {
+          const user = await response.json();
+          localStorage.setItem('current_user', JSON.stringify(user));
+
+          // Reload authService to pick up the new tokens
+          (authService as any).accessToken = accessToken;
+          (authService as any).refreshToken = refreshToken;
+          (authService as any).currentUser = user;
+
+          console.log('✅ OAuth authentication successful:', user);
+
+          // Clean up URL by removing query parameters
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+
+          // Show success message
+          setTimeout(() => {
+            alert(`Bienvenue ${user.display_name} ! Vous êtes connecté via OAuth.`);
+          }, 100);
+        } else {
+          console.error('Failed to fetch user info after OAuth');
+          // Clean up invalid tokens
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+        }
+      } catch (error) {
+        console.error('Error processing OAuth callback:', error);
+        // Clean up on error
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+      }
+    }
   }
 
   public navigateTo(route: string): void {
@@ -281,6 +340,18 @@ class Router {
           </div>
           <div id="error-message" class="error-message"></div>
         </form>
+
+        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p style="text-align: center; margin-bottom: 1rem; color: #888;">Ou se connecter avec :</p>
+          <div style="display: flex; gap: 1rem; justify-content: center;">
+            <a href="/api/auth/oauth/42/" class="btn" style="background: #00babc; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 4px; display: inline-block;">
+              Se connecter avec 42
+            </a>
+            <a href="/api/auth/oauth/github/" class="btn" style="background: #333; color: white; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 4px; display: inline-block;">
+              Se connecter avec GitHub
+            </a>
+          </div>
+        </div>
       </div>
     `;
 
