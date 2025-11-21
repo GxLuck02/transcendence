@@ -1,0 +1,61 @@
+services:
+  # Redis (for WebSockets)
+  redis:
+    image: redis:7-alpine
+    container_name: transcendence_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - transcendence_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Fastify Backend (Node.js)
+  api:
+    build: ./fastify-backend
+    container_name: transcendence_api
+    volumes:
+      - sqlite_data:/app/data
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=production
+      - PORT=8000
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - WEB3_PROVIDER_URI=${WEB3_PROVIDER_URI:-https://api.avax-test.network/ext/bc/C/rpc}
+      - BLOCKCHAIN_PRIVATE_KEY=${BLOCKCHAIN_PRIVATE_KEY:-}
+      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - transcendence_network
+    restart: unless-stopped
+
+  # Nginx (Reverse Proxy with SSL)
+  nginx:
+    image: nginx:alpine
+    container_name: transcendence_nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:z
+      - ./nginx/ssl:/etc/nginx/ssl:z
+      - ./frontend/dist:/usr/share/nginx/html:z
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"
+    depends_on:
+      - api
+    networks:
+      - transcendence_network
+    restart: unless-stopped
+
+networks:
+  transcendence_network:
+    driver: bridge
+
+volumes:
+  sqlite_data:
