@@ -61,6 +61,7 @@ class Router {
       '/chat': this.chatPage.bind(this),
       '/profile': this.profilePage.bind(this),
       '/tournament': this.tournamentPage.bind(this),
+      '/stats': this.statsPage.bind(this),
     };
 
     this.init();
@@ -1901,6 +1902,36 @@ class Router {
     } else {
       nextMatchBox.textContent = `Prochaine rencontre : ${nextMatch.player1.alias} vs ${nextMatch.player2.alias}`;
     }
+  }
+
+  private statsPage(): void {
+    const content = document.getElementById('content');
+    if (!content) return;
+
+    const user = authService.currentUser;
+
+    content.innerHTML = `
+      <div class="stats-page">
+        <h2>Dashboards Stats</h2>
+        <div class="stats-info" style="margin-top: 2rem;">
+          <div class="panel" style="background: rgba(0,212,255,0.1); padding: 2rem; border-radius: 8px; text-align: center;">
+            <h3 style="color: #00d4ff; margin-bottom: 1rem;">En construction</h3>
+
+            <!-- TODO: Intégrer le module "User and game stats dashboards" -->
+            <!-- TODO: Connexion au service stats.service.ts -->
+            <!-- TODO: Afficher les statistiques utilisateur depuis l'API -->
+            <div id="stats-dashboard-placeholder" style="display: none;">
+              <!-- Les dashboards seront rendus ici -->
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 2rem; text-align: center;">
+          <a href="/" data-route="/" class="btn btn-primary">Retour à l'accueil</a>
+          ${user ? `<a href="/profile" data-route="/profile" class="btn btn-secondary" style="margin-left: 1rem;">Mon profil</a>` : ''}
+        </div>
+      </div>
+    `;
   }
 
   private notFound(): void {
