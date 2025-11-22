@@ -3,6 +3,8 @@
  * Part of ft_transcendence project
  */
 
+//import { timeStamp } from "console";
+
 interface Ball {
   x: number;
   y: number;
@@ -59,12 +61,18 @@ export class PongGame {
   private gameOver: boolean = false;
   private winner: string | null = null;
   private maxScore: number;
-  private aiDifficulty: 'easy' | 'medium' | 'hard';
-  private aiReactionSpeed: number;
+  //private aiDifficulty: 'easy' | 'medium' | 'hard';
+  //private aiReactionSpeed: number;
+  private aiLastUpdate: number = 0;
+  private aiDecision: 'up' | 'down' | 'none' = 'none';
+  private aiTargetY: number = 0;
   private onScoreUpdate: ((scores: { player1: number; player2: number }) => void) | null;
   private onGameOver: ((result: { winner: string; player1Score: number; player2Score: number }) => void) | null;
   private keyDownHandler: (e: KeyboardEvent) => void;
   private keyUpHandler: (e: KeyboardEvent) => void;
+  private frameCount = 0;
+  private lastFpsCheck = performance.now();
+  //private currentFPS = 60;
 
   constructor(canvasId: string, options: PongGameOptions = {}) {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -127,8 +135,8 @@ export class PongGame {
     this.maxScore = options.maxScore || 11;
 
     // AI settings
-    this.aiDifficulty = options.aiDifficulty || 'medium';
-    this.aiReactionSpeed = this.getAIReactionSpeed();
+    //this.aiDifficulty = options.aiDifficulty || 'medium';
+    //this.aiReactionSpeed = this.getAIReactionSpeed();
 
     // Callbacks
     this.onScoreUpdate = options.onScoreUpdate || null;
@@ -143,7 +151,7 @@ export class PongGame {
     this.gameLoop();
   }
 
-  private getAIReactionSpeed(): number {
+  /*private getAIReactionSpeed(): number {
     switch (this.aiDifficulty) {
       case 'easy':
         return 0.03;
@@ -152,7 +160,7 @@ export class PongGame {
       default:
         return 0.05; // medium
     }
-  }
+  }*/
 
   private handleKeyDown(e: KeyboardEvent): void {
     switch (e.key.toLowerCase()) {
@@ -251,38 +259,83 @@ export class PongGame {
     // Player 2 (or AI)
     if (this.gameMode === 'vs_ai') {
       this.updateAI();
-    } else {
-      if (this.player2.upPressed && this.player2.y > 0) {
-        this.player2.y -= this.player2.speed;
-      }
-      if (this.player2.downPressed && this.player2.y < this.height - this.player2.height) {
-        this.player2.y += this.player2.speed;
-      }
+    }
+    if (this.player2.upPressed && this.player2.y > 0) {
+      this.player2.y -= this.player2.speed;
+    }
+    if (this.player2.downPressed && this.player2.y < this.height - this.player2.height) {
+      this.player2.y += this.player2.speed;
     }
   }
 
-  private updateAI(): void {
-    // AI follows ball's Y position
-    const paddleCenter = this.player2.y + this.player2.height / 2;
-    const targetY = this.ball.y;
+private updateAI(): void {
+    const now = performance.now();
 
-    // Only move if ball is moving towards AI
-    if (this.ball.velocityX > 0) {
-      if (paddleCenter < targetY - 35) {
-        this.player2.y += this.player2.speed * this.aiReactionSpeed * 100;
-      } else if (paddleCenter > targetY + 35) {
-        this.player2.y -= this.player2.speed * this.aiReactionSpeed * 100;
-      }
-    }
-
-    // Clamp AI paddle position
-    if (this.player2.y < 0) this.player2.y = 0;
-    if (this.player2.y > this.height - this.player2.height) {
-      this.player2.y = this.height - this.player2.height;
+  // 1 FPS
+  if (now - this.aiLastUpdate >= 1000) {
+    this.aiLastUpdate = now;
+    const ballComingToIA = this.ball.velocityX > 0;
+    if (ballComingToIA) {
+      // ball direct IA
+      const impactY = this.predictImpactYFromCurrentState();
+      this.aiTargetY = impactY;
+    } else {// ball direct player 
+      this.aiTargetY = this.height / 2;
     }
   }
+  const paddleCenter = this.player2.y + this.player2.height / 2;
+  const margin = 15; // tolerance coordonnee
+
+  if (paddleCenter < this.aiTargetY - margin) {
+    this.aiDecision = 'down';
+  } else if (paddleCenter > this.aiTargetY + margin) {
+    this.aiDecision = 'up';
+  } else {
+    this.aiDecision = 'none';
+  }
+
+  this.player2.upPressed = (this.aiDecision === 'up');
+  this.player2.downPressed = (this.aiDecision === 'down');
+}
+
+private predictImpactYFromCurrentState(): number {
+
+  // clone
+  let x = this.ball.x;
+  let y = this.ball.y;
+  let vx = this.ball.velocityX;
+  let vy = this.ball.velocityY;
+  const radius = this.ball.radius;
+
+  const steps = 75; // reglade balle de simu
+
+  for (let i = 0; i < steps; i++) {
+    x += vx;
+    y += vy;
+    if (y - radius < 0) {
+      y = radius + (radius - y);
+      vy = -vy;
+    }
+    if (y + radius > this.height) {
+      y = this.height - radius - (y + radius - this.height);
+      vy = -vy;
+    }
+    if (x + radius >= this.player2.x) {
+      return y;  // point d'impact estimé
+    }
+  }
+  return this.height / 2;
+}
 
   private updateBall(): void {
+    this.frameCount++;
+
+    const now = performance.now();
+    if (now - this.lastFpsCheck >= 1000) {
+      //this.currentFPS = this.frameCount;
+      this.frameCount = 0;
+      this.lastFpsCheck = now;
+    }
     // Move ball
     this.ball.x += this.ball.velocityX;
     this.ball.y += this.ball.velocityY;
