@@ -1,31 +1,27 @@
-FROM node:20-alpine
+FROM    base AS basebackend
 
-# Install build dependencies for better-sqlite3 and sodium-native
-RUN apk add --no-cache \
+RUN apk install -y --no-install-recommends \
     python3 \
-    make \
-    g++ \
+    node \
     gcc \
     musl-dev \
-    linux-headers \
-    libc-dev
+    libc-dev \
+    rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# COPY package*.json ./
 
-# Install dependencies (not --production because better-sqlite3 needs build tools)
-RUN npm ci
+# RUN npm ci
 
-# Copy source code
-COPY src ./src
+# # Copy source code
+# COPY src ./src
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data
+# # Create data directory for SQLite
+# RUN mkdir -p /app/data
 
-# Expose port
-EXPOSE 8000
+# # Expose port
+# EXPOSE 8000
 
-# Start the server
-CMD ["node", "src/server.js"]
+# # Start the server
+# CMD ["node", "src/server.js"]
