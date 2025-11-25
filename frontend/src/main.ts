@@ -228,6 +228,7 @@ class Router {
       headers,
     });
 
+    authService.handleUnauthorizedResponse(response);
     if (!response.ok) {
       let message = 'Erreur serveur';
       try {

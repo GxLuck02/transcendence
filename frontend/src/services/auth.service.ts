@@ -16,6 +16,7 @@ export class AuthService {
   public currentUser: User | null = null;
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
+  private hasTriggeredLogoutRedirect = false;
 
   constructor() {
     this.loadTokens();
@@ -53,10 +54,26 @@ export class AuthService {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('current_user');
+    this.hasTriggeredLogoutRedirect = false;
   }
 
   public isAuthenticated(): boolean {
     return !!this.accessToken && !!this.currentUser;
+  }
+
+  public handleUnauthorizedResponse(response: Response): void {
+    if (response.status !== 401) {
+      return;
+    }
+
+    this.clearAuth();
+
+    if (!this.hasTriggeredLogoutRedirect) {
+      this.hasTriggeredLogoutRedirect = true;
+      window.location.replace('/login');
+    }
+
+    throw new Error('Session expirée. Veuillez vous reconnecter.');
   }
 
   public async register(
@@ -146,11 +163,8 @@ export class AuthService {
         Authorization: `Bearer ${this.accessToken}`,
       },
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
-      if (response.status === 401) {
-        this.clearAuth();
-      }
       throw new Error('Failed to get user info');
     }
 
@@ -173,7 +187,7 @@ export class AuthService {
       },
       body: formData,
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
       const error = await response.json();
       throw new Error((Object.values(error)[0] as string) || 'Profile update failed');
@@ -190,7 +204,7 @@ export class AuthService {
         Authorization: `Bearer ${this.accessToken}`,
       },
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
       throw new Error('Failed to get match history');
     }
@@ -204,7 +218,7 @@ export class AuthService {
         Authorization: `Bearer ${this.accessToken}`,
       },
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
       throw new Error('Failed to get friends list');
     }
@@ -221,7 +235,7 @@ export class AuthService {
         'Content-Type': 'application/json',
       },
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to add friend');
@@ -237,7 +251,7 @@ export class AuthService {
         Authorization: `Bearer ${this.accessToken}`,
       },
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to remove friend');
@@ -256,7 +270,7 @@ export class AuthService {
         Authorization: `Bearer ${this.accessToken}`,
       },
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
       throw new Error('Failed to get user stats');
     }
@@ -281,7 +295,7 @@ export class AuthService {
         Authorization: `Bearer ${this.accessToken}`,
       },
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
       throw new Error('Failed to get blocked users');
     }
@@ -298,7 +312,7 @@ export class AuthService {
         'Content-Type': 'application/json',
       },
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to block user');
@@ -314,7 +328,7 @@ export class AuthService {
         Authorization: `Bearer ${this.accessToken}`,
       },
     });
-
+    this.handleUnauthorizedResponse(response);
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to unblock user');

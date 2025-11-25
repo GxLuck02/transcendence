@@ -26,6 +26,27 @@ interface ChatOutgoingMessage {
 
 type MessageType = 'info' | 'error' | 'warning';
 
+function resolveBackendOrigin(): string {
+  const envOrigin = (import.meta as any).env?.VITE_BACKEND_ORIGIN as string | undefined;
+  if (envOrigin) {
+    return envOrigin;
+  }
+
+  try {
+    const apiUrl = new URL(API_BASE);
+    return `${apiUrl.protocol}//${apiUrl.host}`;
+  } catch {
+    return window.location.origin;
+  }
+}
+
+function buildChatWebSocketUrl(): string {
+  const backendOrigin = resolveBackendOrigin();
+  const backendUrl = new URL(backendOrigin);
+  const protocol = backendUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${backendUrl.host}/ws/chat/`;
+}
+
 export class ChatClient {
   private socket: WebSocket | null = null;
   private connected: boolean = false;
@@ -36,9 +57,7 @@ export class ChatClient {
 
   public connect(): void {
     // Get protocol (ws or wss)
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/chat/`;
+    const wsUrl = buildChatWebSocketUrl();
 
     console.log('Connecting to chat WebSocket:', wsUrl);
 
@@ -327,6 +346,7 @@ async function chatApiFetch(path: string, options: RequestInit = {}) {
     headers,
   });
 
+  authService.handleUnauthorizedResponse(response);
   if (!response.ok) {
     let message = 'Erreur serveur';
     try {

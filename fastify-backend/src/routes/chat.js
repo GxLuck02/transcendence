@@ -6,24 +6,41 @@ export default async function chatRoutes(app) {
     const userId = request.user.userId;
 
     const conversations = db.prepare(`
+      WITH targets AS (
+        SELECT recipient_id AS other_user_id
+        FROM chat_messages
+        WHERE sender_id = ?
+        UNION
+        SELECT sender_id AS other_user_id
+        FROM chat_messages
+        WHERE recipient_id = ?
+      )
       SELECT
-        CASE
-          WHEN cm.sender_id = ? THEN cm.recipient_id
-          ELSE cm.sender_id
-        END as user_id,
-        MAX(cm.timestamp) as last_message_time,
-        (SELECT content FROM chat_messages cm2
-         WHERE (cm2.sender_id = user_id AND cm2.recipient_id = ?)
-            OR (cm2.sender_id = ? AND cm2.recipient_id = user_id)
-         ORDER BY cm2.timestamp DESC LIMIT 1) as last_message_content,
-        (SELECT COUNT(*) FROM chat_messages cm3
-         WHERE cm3.sender_id = user_id AND cm3.recipient_id = ?
-           AND cm3.is_read = 0) as unread_count
-      FROM chat_messages cm
-      WHERE cm.sender_id = ? OR cm.recipient_id = ?
-      GROUP BY user_id
+        other_user_id AS user_id,
+        (
+          SELECT MAX(timestamp)
+          FROM chat_messages
+          WHERE (sender_id = ? AND recipient_id = other_user_id)
+             OR (sender_id = other_user_id AND recipient_id = ?)
+        ) AS last_message_time,
+        (
+          SELECT content
+          FROM chat_messages
+          WHERE (sender_id = other_user_id AND recipient_id = ?)
+             OR (sender_id = ? AND recipient_id = other_user_id)
+          ORDER BY timestamp DESC
+          LIMIT 1
+        ) AS last_message_content,
+        (
+          SELECT COUNT(*)
+          FROM chat_messages
+          WHERE sender_id = other_user_id
+            AND recipient_id = ?
+            AND is_read = 0
+        ) AS unread_count
+      FROM targets
       ORDER BY last_message_time DESC
-    `).all(userId, userId, userId, userId, userId, userId);
+    `).all(userId, userId, userId, userId, userId, userId, userId);
 
     const result = [];
     for (const conv of conversations) {

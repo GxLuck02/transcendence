@@ -47,12 +47,28 @@ app.register(fastifyCookie);
 app.register(fastifyWebsocket);
 
 // Helper functions
-const userColumns = `
-  id, username, email, display_name, avatar,
-  wins, losses, pong_wins, pong_losses,
-  rps_wins, rps_losses, is_online, last_seen,
-  created_at, updated_at
-`;
+const userColumnNames = [
+  'id',
+  'username',
+  'email',
+  'display_name',
+  'avatar',
+  'wins',
+  'losses',
+  'pong_wins',
+  'pong_losses',
+  'rps_wins',
+  'rps_losses',
+  'is_online',
+  'last_seen',
+  'created_at',
+  'updated_at'
+];
+
+const buildUserColumns = (alias = 'users') =>
+  userColumnNames.map((column) => `${alias}.${column} as ${column}`).join(', ');
+
+const userColumns = buildUserColumns();
 
 const findUserByUsername = db.prepare(`SELECT ${userColumns} FROM users WHERE username = ?`);
 const findUserById = db.prepare(`SELECT ${userColumns} FROM users WHERE id = ?`);
@@ -153,7 +169,7 @@ app.get('/api/users/me/', { preValidation: [app.authenticate] }, async (request,
 // Get friends list
 app.get('/api/users/friends/', { preValidation: [app.authenticate] }, async (request, reply) => {
   const stmt = db.prepare(`
-    SELECT ${userColumns}
+    SELECT ${buildUserColumns('u')}
     FROM friendships f
     JOIN users u ON u.id = f.friend_id
     WHERE f.user_id = ?
@@ -195,7 +211,7 @@ app.delete('/api/users/friends/:id/remove/', { preValidation: [app.authenticate]
 // Get blocked users
 app.get('/api/users/blocked/', { preValidation: [app.authenticate] }, async (request, reply) => {
   const stmt = db.prepare(`
-    SELECT ${userColumns}
+    SELECT ${buildUserColumns('u')}
     FROM blocked_users b
     JOIN users u ON u.id = b.blocked_id
     WHERE b.blocker_id = ?

@@ -1,0 +1,5 @@
+25/11/2025 - Début de session : analyse du module live chat, pas encore de modifications appliquées.
+25/11/2025 - Mise à jour chat.service.ts : construction de l’URL WebSocket basée sur l’origine backend (ou VITE_BACKEND_ORIGIN) pour garantir l’utilisation de wss://localhost:8443/ws/chat/ en dev.
+25/11/2025 - Ajout d’une gestion centralisée des 401 : auth.service.ts, main.ts et chat.service.ts forcent désormais la déconnexion/redirection vers /login lorsqu’un token devient invalide, évitant les états bloqués “Invalid or missing token”.
+25/11/2025 - Corrections backend chat : requêtes SQL réécrites pour supprimer les erreurs (alias user_id, colonnes ambiguës) et garde-fou sur /ws/chat/ afin d’éviter les crashs lorsque la connexion n’est pas WebSocket.
+

@@ -5,6 +5,11 @@ const chatConnections = new Map(); // userId -> socket
 
 export default async function chatWebSocket(app) {
   app.get('/ws/chat/', { websocket: true }, (connection, req) => {
+    if (!connection || !connection.socket || typeof connection.socket.on !== 'function') {
+      req.log?.warn?.('Requête non-WebSocket reçue sur /ws/chat/');
+      return;
+    }
+
     const { socket } = connection;
     let userId = null;
 
