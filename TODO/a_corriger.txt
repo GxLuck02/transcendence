@@ -1,0 +1,26 @@
+ ⚠️ Risques identifiés à corriger
+
+  1. JWT_SECRET avec valeur par défaut faible (CRITIQUE)
+
+  - Fichier: fastify-backend/src/server.js:16
+  const JWT_SECRET = process.env.JWT_SECRET || 'replace-me-with-secure-secret';
+  ➡️ Si la variable n'est pas définie, n'importe qui peut forger des tokens.
+
+  2. Pas de rate limiting (ÉLEVÉ)
+
+  - Vulnérable au brute force sur /api/users/login/ et /api/users/register/
+
+  3. Validation des inputs insuffisante (ÉLEVÉ)
+
+  - server.js:75-105 : Pas de validation de format email, longueur username
+  - chat.js:95-127 : Pas de limite de longueur pour les messages
+  - blockchain.js:61-102 : Pas de validation des types
+
+  4. Tokens OAuth dans l'URL (MODÉRÉ)
+
+  - main.ts:94-106 : Tokens exposés dans l'historique du navigateur
+
+  5. XSS potentiel (MODÉRÉ)
+
+  - main.ts:287 : innerHTML utilisé avec user.display_name non échappé
+  - Mais atténué car les données viennent du backend authentifié
