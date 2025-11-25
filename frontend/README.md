@@ -13,8 +13,15 @@ frontend/
 │   ├── main.ts              # Point d'entrée principal (Router SPA)
 │   ├── types/
 │   │   └── index.ts         # Types TypeScript globaux
-│   └── services/
-│       └── auth.service.ts  # Service d'authentification
+│   ├── services/
+│   │   ├── auth.service.ts  # Service d'authentification
+│   │   ├── chat.service.ts  # Service de chat
+│   │   ├── tournament.service.ts  # Service de tournoi
+│   │   └── stats.service.ts # Service de statistiques (en construction)
+│   └── games/
+│       ├── pong.ts          # Jeu Pong local
+│       ├── pong-remote.ts   # Jeu Pong en ligne
+│       └── rps.ts           # Pierre-Feuille-Ciseaux
 ├── css/
 │   └── main.css            # Styles CSS
 ├── index.html              # HTML principal
@@ -82,4 +89,38 @@ npm run build
 Le fichier `nginx/nginx.conf` doit pointer vers:
 - Development: Port 5173 (Vite dev server)
 - Production: `frontend/dist/` (fichiers compilés)
+
+## Routes disponibles
+
+| Route | Description | Statut |
+|-------|-------------|--------|
+| `/` | Page d'accueil | ✅ Fonctionnel |
+| `/login` | Connexion utilisateur | ✅ Fonctionnel |
+| `/register` | Inscription utilisateur | ✅ Fonctionnel |
+| `/game/pong` | Jeu Pong (local, IA, remote) | ✅ Fonctionnel |
+| `/game/pong/matchmaking` | Matchmaking Pong | ✅ Fonctionnel |
+| `/game/pong/remote` | Pong en ligne | ✅ Fonctionnel |
+| `/game/rps` | Pierre-Feuille-Ciseaux | ✅ Fonctionnel |
+| `/chat` | Chat global et messages privés | ✅ Fonctionnel |
+| `/profile` | Profil utilisateur | ✅ Fonctionnel |
+| `/tournament` | Organisation de tournois | ✅ Fonctionnel |
+| `/stats` | **Dashboards statistiques** | 🚧 **En construction** |
+
+### Module Stats (en construction)
+
+La route `/stats` est visible dans la navigation mais sa fonctionnalité n'est pas encore implémentée.
+
+**Fonctionnalités prévues** :
+- Statistiques utilisateur détaillées
+- Historique des matchs et tournois
+- Graphiques de progression
+- Classements et comparaisons
+- Analyse temporelle des performances
+
+**TODO** :
+- [ ] Implémenter l'API backend pour les statistiques
+- [ ] Connecter `stats.service.ts` à l'API
+- [ ] Créer les composants de visualisation (graphiques, tableaux)
+- [ ] Ajouter les dashboards utilisateur
+- [ ] Intégrer le module "User and game stats dashboards"
 
