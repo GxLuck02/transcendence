@@ -450,9 +450,7 @@ class Router {
           <h3>Choisissez un mode de jeu :</h3>
           <div class="mode-buttons">
             <button id="mode-local" class="btn btn-primary">2 Joueurs (Local)</button>
-            <button id="mode-ai-easy" class="btn btn-secondary">vs IA (Facile)</button>
-            <button id="mode-ai-medium" class="btn btn-secondary">vs IA (Moyen)</button>
-            <button id="mode-ai-hard" class="btn btn-secondary">vs IA (Difficile)</button>
+            <button id="mode-ai" class="btn btn-secondary">vs IA</button>
             <button id="mode-remote" class="btn btn-success">Multijoueur en ligne</button>
           </div>
         </div>
@@ -471,16 +469,8 @@ class Router {
       this.startPongGame('2p_local');
     });
 
-    document.getElementById('mode-ai-easy')?.addEventListener('click', () => {
-      this.startPongGame('vs_ai', 'easy');
-    });
-
-    document.getElementById('mode-ai-medium')?.addEventListener('click', () => {
-      this.startPongGame('vs_ai', 'medium');
-    });
-
-    document.getElementById('mode-ai-hard')?.addEventListener('click', () => {
-      this.startPongGame('vs_ai', 'hard');
+    document.getElementById('mode-ai')?.addEventListener('click', () => {
+      this.startPongGame('vs_ai');
     });
 
     document.getElementById('mode-remote')?.addEventListener('click', () => {
@@ -815,7 +805,7 @@ class Router {
   }
 
 
-  private startPongGame(mode: 'vs_local' | '2p_local' | 'vs_ai' | '2p_remote', difficulty?: 'easy' | 'medium' | 'hard'): void {
+  private startPongGame(mode: 'vs_local' | '2p_local' | 'vs_ai' | '2p_remote'): void {
     // Hide mode selector, show game
     (document.querySelector('.game-mode-selector') as HTMLElement)!.style.display = 'none';
     document.getElementById('game-container')!.style.display = 'block';
@@ -828,7 +818,6 @@ class Router {
     // Create new game
     this.currentPongGame = new PongGame('pongCanvas', {
       gameMode: mode,
-      aiDifficulty: difficulty,
       onGameOver: (result) => {
         alert(`${result.winner} a gagné ! Score: ${result.player1Score} - ${result.player2Score}`);
       }

@@ -29,7 +29,6 @@ interface PongGameOptions {
   gameMode?: 'vs_local' | '2p_local' | 'vs_ai' | '2p_remote';
   matchId?: number | null;
   maxScore?: number;
-  aiDifficulty?: 'easy' | 'medium' | 'hard';
   onScoreUpdate?: (scores: { player1: number; player2: number }) => void;
   onGameOver?: (result: { winner: string; player1Score: number; player2Score: number }) => void;
 }
@@ -59,8 +58,7 @@ export class PongGame {
   private gameOver: boolean = false;
   private winner: string | null = null;
   private maxScore: number;
-  private aiDifficulty: 'easy' | 'medium' | 'hard';
-  private aiReactionSpeed: number;
+  private aiReactionSpeed: number = 0.05;
   private onScoreUpdate: ((scores: { player1: number; player2: number }) => void) | null;
   private onGameOver: ((result: { winner: string; player1Score: number; player2Score: number }) => void) | null;
   private keyDownHandler: (e: KeyboardEvent) => void;
@@ -126,10 +124,6 @@ export class PongGame {
     // Game state
     this.maxScore = options.maxScore || 11;
 
-    // AI settings
-    this.aiDifficulty = options.aiDifficulty || 'medium';
-    this.aiReactionSpeed = this.getAIReactionSpeed();
-
     // Callbacks
     this.onScoreUpdate = options.onScoreUpdate || null;
     this.onGameOver = options.onGameOver || null;
@@ -141,17 +135,6 @@ export class PongGame {
 
     // Start game loop
     this.gameLoop();
-  }
-
-  private getAIReactionSpeed(): number {
-    switch (this.aiDifficulty) {
-      case 'easy':
-        return 0.03;
-      case 'hard':
-        return 0.08;
-      default:
-        return 0.05; // medium
-    }
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
