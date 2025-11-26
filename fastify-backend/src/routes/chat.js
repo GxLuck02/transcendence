@@ -1,5 +1,9 @@
 import db from '../db.js';
 
+// Constants for message validation
+const MAX_MESSAGE_LENGTH = 2000;
+const MAX_ROOM_CODE_LENGTH = 50;
+
 export default async function chatRoutes(app) {
   // Get conversations list
   app.get('/api/chat/conversations/', { preValidation: [app.authenticate] }, async (request, reply) => {
@@ -98,6 +102,25 @@ export default async function chatRoutes(app) {
 
     if (!recipient_id || !content) {
       return reply.code(400).send({ error: 'recipient_id and content are required' });
+    }
+
+    // Validate content length
+    if (typeof content !== 'string' || content.length > MAX_MESSAGE_LENGTH) {
+      return reply.code(400).send({ error: `Message must be a string of max ${MAX_MESSAGE_LENGTH} characters` });
+    }
+
+    // Validate recipient_id is a number
+    if (typeof recipient_id !== 'number' || !Number.isInteger(recipient_id) || recipient_id <= 0) {
+      return reply.code(400).send({ error: 'recipient_id must be a positive integer' });
+    }
+
+    // Validate optional fields
+    if (game_room_code && (typeof game_room_code !== 'string' || game_room_code.length > MAX_ROOM_CODE_LENGTH)) {
+      return reply.code(400).send({ error: 'Invalid game_room_code' });
+    }
+
+    if (message_type && !['text', 'game_invite'].includes(message_type)) {
+      return reply.code(400).send({ error: 'Invalid message_type' });
     }
 
     // Check if recipient exists

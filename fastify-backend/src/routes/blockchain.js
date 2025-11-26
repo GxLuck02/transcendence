@@ -69,6 +69,19 @@ export default async function blockchainRoutes(app) {
       return reply.code(400).send({ error: 'tournament_id, winner_username, and winner_score are required' });
     }
 
+    // Validate types
+    if (typeof tournament_id !== 'number' || !Number.isInteger(tournament_id) || tournament_id <= 0) {
+      return reply.code(400).send({ error: 'tournament_id must be a positive integer' });
+    }
+
+    if (typeof winner_username !== 'string' || winner_username.length < 1 || winner_username.length > 100) {
+      return reply.code(400).send({ error: 'winner_username must be a string between 1-100 characters' });
+    }
+
+    if (typeof winner_score !== 'number' || !Number.isInteger(winner_score) || winner_score < 0) {
+      return reply.code(400).send({ error: 'winner_score must be a non-negative integer' });
+    }
+
     try {
       // Send transaction to blockchain
       const tx = await contract.methods.recordTournamentWinner(

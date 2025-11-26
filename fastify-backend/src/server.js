@@ -3,6 +3,7 @@ import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import fastifyWebsocket from '@fastify/websocket';
 import fastifyCookie from '@fastify/cookie';
+import fastifyRateLimit from '@fastify/rate-limit';
 import db from './db.js';
 import { hashPassword, verifyPassword } from './utils/password.js';
 import pongRoutes from './routes/pong.js';
@@ -13,8 +14,14 @@ import oauthRoutes from './routes/oauth.js';
 import pongWebSocket from './websockets/pong.js';
 import chatWebSocket from './websockets/chat.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'replace-me-with-secure-secret';
+const JWT_SECRET = process.env.JWT_SECRET;
 const PORT = process.env.PORT || 8000;
+
+// Security check: JWT_SECRET must be defined and strong
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  console.error('FATAL: JWT_SECRET must be defined in environment and at least 32 characters long');
+  process.exit(1);
+}
 
 const app = Fastify({
   logger: true,
@@ -24,6 +31,12 @@ const app = Fastify({
 app.register(fastifyCors, {
   origin: ['https://localhost:8443', 'https://127.0.0.1:8443'],
   credentials: true,
+});
+
+// Rate limiting configuration (global)
+app.register(fastifyRateLimit, {
+  max: 100,
+  timeWindow: '1 minute',
 });
 
 // JWT configuration
@@ -69,14 +82,68 @@ function calcWinRate(wins = 0, losses = 0) {
   return Math.round((Number(wins) / total) * 10000) / 100;
 }
 
+// ==================== INPUT VALIDATION HELPERS ====================
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,30}$/;
+
+function validateEmail(email) {
+  return typeof email === 'string' && EMAIL_REGEX.test(email) && email.length <= 254;
+}
+
+function validateUsername(username) {
+  return typeof username === 'string' && USERNAME_REGEX.test(username);
+}
+
+function validateDisplayName(displayName) {
+  return typeof displayName === 'string' && displayName.trim().length >= 1 && displayName.length <= 50;
+}
+
+function validatePassword(password) {
+  return typeof password === 'string' && password.length >= 8 && password.length <= 128;
+}
+
+// Rate limit config for auth routes (stricter)
+const authRateLimit = {
+  config: {
+    rateLimit: {
+      max: 5,
+      timeWindow: '1 minute',
+    },
+  },
+};
+
 // ==================== USER ROUTES ====================
 
 // Register
-app.post('/api/users/register/', async (request, reply) => {
+app.post('/api/users/register/', authRateLimit, async (request, reply) => {
   const { username, email, display_name, password, password_confirm } = request.body || {};
+
+  // Validate required fields
   if (!username || !email || !display_name || !password || !password_confirm) {
     return reply.code(400).send({ error: 'Missing required fields' });
   }
+
+  // Validate username format (3-30 chars, alphanumeric + _ -)
+  if (!validateUsername(username)) {
+    return reply.code(400).send({ error: 'Username must be 3-30 characters, alphanumeric, underscore or hyphen only' });
+  }
+
+  // Validate email format
+  if (!validateEmail(email)) {
+    return reply.code(400).send({ error: 'Invalid email format' });
+  }
+
+  // Validate display name
+  if (!validateDisplayName(display_name)) {
+    return reply.code(400).send({ error: 'Display name must be 1-50 characters' });
+  }
+
+  // Validate password strength
+  if (!validatePassword(password)) {
+    return reply.code(400).send({ error: 'Password must be 8-128 characters' });
+  }
+
   if (password !== password_confirm) {
     return reply.code(400).send({ error: 'Passwords do not match' });
   }
@@ -105,7 +172,7 @@ app.post('/api/users/register/', async (request, reply) => {
 });
 
 // Login
-app.post('/api/users/login/', async (request, reply) => {
+app.post('/api/users/login/', authRateLimit, async (request, reply) => {
   const { username, password } = request.body || {};
   if (!username || !password) {
     return reply.code(400).send({ error: 'Missing credentials' });

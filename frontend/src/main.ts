@@ -97,6 +97,11 @@ class Router {
     const refreshToken = params.get('refresh_token');
 
     if (accessToken && refreshToken) {
+      // SECURITY: Immediately clean URL to remove tokens from browser history
+      // This must happen BEFORE any async operations
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+
       console.log('OAuth tokens detected, processing authentication...');
 
       try {
@@ -122,10 +127,6 @@ class Router {
           (authService as any).currentUser = user;
 
           console.log('✅ OAuth authentication successful:', user);
-
-          // Clean up URL by removing query parameters
-          const cleanUrl = window.location.origin + window.location.pathname;
-          window.history.replaceState({}, document.title, cleanUrl);
 
           // Show success message
           setTimeout(() => {
@@ -280,7 +281,9 @@ class Router {
     if (!content) return;
 
     const user = authService.currentUser;
-    const greeting = user ? `Bienvenue, ${user.display_name || user.username} !` : 'Bienvenue sur ft_transcendence';
+    // Sanitize user data to prevent XSS
+    const safeDisplayName = user ? this.sanitizeHTML(user.display_name || user.username) : '';
+    const greeting = user ? `Bienvenue, ${safeDisplayName} !` : 'Bienvenue sur ft_transcendence';
 
     content.innerHTML = `
       <div class="home">
@@ -1113,11 +1116,13 @@ class Router {
 
     const user = authService.currentUser;
 
+    const safeChatName = this.sanitizeHTML(user?.display_name || user?.username || '');
+
     content.innerHTML = `
       <div class="chat-page">
         <div class="chat-header">
           <h2>💬 Espace de discussion</h2>
-          <p>Bienvenue ${user?.display_name || user?.username}. Discutez globalement, envoyez des messages privés, bloquez des utilisateurs ou invitez vos amis à un Pong.</p>
+          <p>Bienvenue ${safeChatName}. Discutez globalement, envoyez des messages privés, bloquez des utilisateurs ou invitez vos amis à un Pong.</p>
         </div>
 
         <div class="chat-layout" style="display: grid; grid-template-columns: 280px 1fr; gap: 1.5rem;">
@@ -1609,13 +1614,17 @@ class Router {
 
     const user = authService.currentUser;
 
+    const safeUsername = this.sanitizeHTML(user?.username || '');
+    const safeEmail = this.sanitizeHTML(user?.email || '');
+    const safeProfileDisplayName = this.sanitizeHTML(user?.display_name || '');
+
     content.innerHTML = `
       <div class="profile-page">
         <h2>Profil</h2>
         <div class="profile-info">
-          <p><strong>Nom d'utilisateur:</strong> ${user?.username}</p>
-          <p><strong>Email:</strong> ${user?.email}</p>
-          <p><strong>Nom d'affichage:</strong> ${user?.display_name}</p>
+          <p><strong>Nom d'utilisateur:</strong> ${safeUsername}</p>
+          <p><strong>Email:</strong> ${safeEmail}</p>
+          <p><strong>Nom d'affichage:</strong> ${safeProfileDisplayName}</p>
         </div>
         <button id="logout-btn" class="btn btn-danger">Se déconnecter</button>
       </div>
