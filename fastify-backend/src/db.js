@@ -29,8 +29,6 @@ const runMigrations = () => {
       losses INTEGER DEFAULT 0,
       pong_wins INTEGER DEFAULT 0,
       pong_losses INTEGER DEFAULT 0,
-      rps_wins INTEGER DEFAULT 0,
-      rps_losses INTEGER DEFAULT 0,
       is_online INTEGER DEFAULT 0,
       last_seen TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -122,25 +120,6 @@ const runMigrations = () => {
       is_read INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
-
-    -- RPS (Rock Paper Scissors) matches table
-    CREATE TABLE IF NOT EXISTS rps_matches (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      player1_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      player2_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      player1_choice TEXT,
-      player2_choice TEXT,
-      winner_id INTEGER REFERENCES users(id),
-      status TEXT DEFAULT 'pending',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TRIGGER IF NOT EXISTS trigger_rps_matches_updated
-    AFTER UPDATE ON rps_matches
-    BEGIN
-      UPDATE rps_matches SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-    END;
 
     -- Blockchain tournament scores
     CREATE TABLE IF NOT EXISTS blockchain_scores (
