@@ -311,10 +311,8 @@ export class PongGameEngine {
 
       if (ballComingToIA) {
         const impactY = this.predictImpactYFromCurrentState();
-        console.log('Impact Y prédit :', impactY);
         const randomOffset = (Math.random() - 0.5) * predictionError;
         this.aiTargetY = impactY + randomOffset;
-        console.log('IA vise Y :', this.aiTargetY);
       } else {
         this.aiTargetY = this.height / 2;
       }
