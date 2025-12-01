@@ -79,6 +79,9 @@ export class PongGameEngine {
   private onGameOver: ((result: { winner: string; player1Score: number; player2Score: number }) => void) | null;
   private keyDownHandler: (e: KeyboardEvent) => void;
   private keyUpHandler: (e: KeyboardEvent) => void;
+  private aiLastUpdate: number = 0;
+  private aiTargetY: number = VIRTUAL_HEIGHT / 2;
+  private aiDecision: 'up' | 'down' | 'none' = 'none';
 
   constructor(options: PongGameOptions = {}) {
     // Game settings
@@ -275,67 +278,104 @@ export class PongGameEngine {
     }
   }
 
-  private updateAI(dt: number): void {
-    // AI follows ball's Y position with same speed as player
-    const paddleCenter = this.player2.y + this.player2.height / 2;
-    const targetY = this.ball.y;
-    const deadzone = 15; // Zone where AI doesn't move (more realistic)
+  private updateAI(dt : number): void {
+    const now = performance.now();
+    let predictionError = 0;
+    let speedMultiplier = 1;
 
-    // Only move if ball is moving towards AI
-    if (this.ball.velocityX > 0) {
-      const distanceToTarget = targetY - paddleCenter;
-      
-      if (Math.abs(distanceToTarget) > deadzone) {
-        // Calculate AI velocity based on difficulty and player speed
-        const aiSpeed = this.player2.speed * 60; // Same base speed as player
-        
-        // Apply difficulty modifier
-        let speedMultiplier = 1.0;
-        switch (this.aiDifficulty) {
-          case 'easy':
-            speedMultiplier = 0.6; // 60% of player speed
-            break;
-          case 'medium':
-            speedMultiplier = 0.85; // 85% of player speed
-            break;
-          case 'hard':
-            speedMultiplier = 1.0; // 100% of player speed
-            break;
-        }
-        
-        // Move AI paddle
-        if (distanceToTarget > 0) {
-          this.player2.velocityY = aiSpeed * speedMultiplier;
-        } else {
-          this.player2.velocityY = -aiSpeed * speedMultiplier;
-        }
-        
-        this.player2.y += this.player2.velocityY * dt;
-      } else {
-        // In deadzone, stop moving
-        this.player2.velocityY = 0;
-      }
-    } else {
-      // Ball going away, center AI paddle slowly
-      const centerY = VIRTUAL_HEIGHT / 2 - this.player2.height / 2;
-      const distanceToCenter = centerY - this.player2.y;
-      
-      if (Math.abs(distanceToCenter) > 5) {
-        const returnSpeed = this.player2.speed * 30; // Slow return to center
-        this.player2.velocityY = distanceToCenter > 0 ? returnSpeed : -returnSpeed;
-        this.player2.y += this.player2.velocityY * dt;
-      } else {
-        this.player2.velocityY = 0;
-      }
+    switch (this.aiDifficulty) {
+      case 'easy':
+        predictionError = 120;   // IA se trompe beaucoup
+        speedMultiplier = 0.5;   // paddle très lent
+        break;
+
+      case 'medium':
+        predictionError = 40;    // IA se trompe un peu
+        speedMultiplier = 0.75;  // paddle moyen
+        break;
+
+      case 'hard':
+      default:
+        predictionError = 0;     // IA presque parfaite
+        speedMultiplier = 1.5;   // paddle plus rapide que le joueur
+        break;
     }
 
-    // Clamp AI paddle position
-    if (this.player2.y < 0) this.player2.y = 0;
-    if (this.player2.y > this.height - this.player2.height) {
+    this.player2.speed = 250 * speedMultiplier;
+
+    // 1 fps
+    if (now - this.aiLastUpdate >= 1000) {
+      this.aiLastUpdate = now;
+
+      const ballComingToIA = this.ball.velocityX > 0;
+
+      if (ballComingToIA) {
+        const impactY = this.predictImpactYFromCurrentState();
+        console.log('Impact Y prédit :', impactY);
+        const randomOffset = (Math.random() - 0.5) * predictionError;
+        this.aiTargetY = impactY + randomOffset;
+        console.log('IA vise Y :', this.aiTargetY);
+      } else {
+        this.aiTargetY = this.height / 2;
+      }
+    }
+  const paddleCenter = this.player2.y + this.player2.height / 2;
+  const margin = 3;
+
+  if (paddleCenter < this.aiTargetY - margin) {
+      this.aiDecision = 'down';
+  }
+  else if (paddleCenter > this.aiTargetY + margin) {
+      this.aiDecision = 'up';
+  }
+  else {
+      this.aiDecision = 'none';
+  }
+
+  this.player2.upPressed   = (this.aiDecision === 'up');
+  this.player2.downPressed = (this.aiDecision === 'down');
+
+  if (this.player2.upPressed)  this.player2.y -= this.player2.speed * dt;
+  if (this.player2.downPressed) this.player2.y += this.player2.speed * dt;
+  // bloque dans le canvas
+  if (this.player2.y < 0) this.player2.y = 0;
+  if (this.player2.y + this.player2.height > this.height) {
       this.player2.y = this.height - this.player2.height;
     }
   }
 
+  private predictImpactYFromCurrentState(): number {
+      let x = this.ball.x;
+      let y = this.ball.y;
+      let vx = this.ball.velocityX;
+      let vy = this.ball.velocityY;
+      const radius = this.ball.radius;
+      const paddleX = this.player2.x;
+
+      if (vx <= 0) return this.height / 2;
+      //boucle tant que la balle n'a pas atteint le paddle
+      let steps = 0;
+      const maxSteps = 1000; 
+
+      while (x + radius < paddleX && steps < maxSteps) {
+          x += vx;
+          y += vy;
+
+          //rebond haut
+          if (y - radius < 0) {
+              y = radius + (radius - y);
+              vy = -vy;
+          }
+          //rebond bas
+          else if (y + radius > this.height) {
+              y = this.height - radius - (y + radius - this.height);
+              vy = -vy;
+          }
+          steps++;
+      }
+      return y;
+  }
+  
   private checkCollisionWithPlayer(b: Ball, player: Paddle): boolean {
     return (
       b.x - b.radius < player.x + player.width &&
