@@ -9,7 +9,6 @@ import { hashPassword, verifyPassword } from './utils/password.js';
 import pongRoutes from './routes/pong.js';
 import chatRoutes from './routes/chat.js';
 import blockchainRoutes from './routes/blockchain.js';
-import rpsRoutes from './routes/rps.js';
 import oauthRoutes from './routes/oauth.js';
 import pongWebSocket from './websockets/pong.js';
 import chatWebSocket from './websockets/chat.js';
@@ -63,7 +62,7 @@ app.register(fastifyWebsocket);
 const userColumns = `
   id, username, email, display_name, avatar,
   wins, losses, pong_wins, pong_losses,
-  rps_wins, rps_losses, is_online, last_seen,
+  is_online, last_seen,
   created_at, updated_at
 `;
 
@@ -318,9 +317,6 @@ app.get('/api/users/stats/', { preValidation: [app.authenticate] }, async (reque
     pong_wins: user.pong_wins,
     pong_losses: user.pong_losses,
     pong_win_rate: calcWinRate(user.pong_wins, user.pong_losses),
-    rps_wins: user.rps_wins,
-    rps_losses: user.rps_losses,
-    rps_win_rate: calcWinRate(user.rps_wins, user.rps_losses),
   });
 });
 
@@ -341,9 +337,6 @@ app.get('/api/users/:id/stats/', { preValidation: [app.authenticate] }, async (r
     pong_wins: user.pong_wins,
     pong_losses: user.pong_losses,
     pong_win_rate: calcWinRate(user.pong_wins, user.pong_losses),
-    rps_wins: user.rps_wins,
-    rps_losses: user.rps_losses,
-    rps_win_rate: calcWinRate(user.rps_wins, user.rps_losses),
   });
 });
 
@@ -384,7 +377,6 @@ app.put('/api/users/profile/', { preValidation: [app.authenticate] }, async (req
 app.register(pongRoutes);
 app.register(chatRoutes);
 app.register(blockchainRoutes);
-app.register(rpsRoutes);
 app.register(oauthRoutes);
 
 // ==================== REGISTER WEBSOCKETS ====================

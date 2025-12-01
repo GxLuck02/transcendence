@@ -16,7 +16,6 @@ import {
 } from './services/chat.service';
 import { PongGame } from './games/pong';
 import { RemotePongGame } from './games/pong-remote';
-import { rpsGame } from './games/rps';
 import { tournamentManager } from './services/tournament.service';
 import type { User } from './types';
 
@@ -57,7 +56,6 @@ class Router {
       '/game/pong': this.pongPage.bind(this),
       '/game/pong/matchmaking': this.pongMatchmakingPage.bind(this),
       '/game/pong/remote': this.pongRemotePage.bind(this),
-      '/game/rps': this.rpsPage.bind(this),
       '/chat': this.chatPage.bind(this),
       '/profile': this.profilePage.bind(this),
       '/tournament': this.tournamentPage.bind(this),
@@ -207,9 +205,6 @@ class Router {
     this.pendingInviteRoomCode = null;
     this.activeConversationUserId = null;
     this.remoteMatchInfo = null;
-
-    // Cleanup RPS game
-    rpsGame.reset();
   }
 
   private async apiRequest(path: string, options: RequestInit = {}): Promise<any> {
@@ -298,9 +293,8 @@ class Router {
             <li>✅ <strong>Base de données</strong> : SQLite conformément au sujet</li>
             <li>✅ <strong>User Management</strong> : Auth JWT + profils + stats</li>
             <li>✅ <strong>Pong</strong> : local, IA multi niveaux et remote WebSocket</li>
-            <li>✅ <strong>Tournois</strong> : saisie d’alias & bracket dynamique</li>
+            <li>✅ <strong>Tournois</strong> : saisie d'alias & bracket dynamique</li>
             <li>✅ <strong>Live Chat</strong> : global, MP, blocages, invitations</li>
-            <li>✅ <strong>Jeu supplémentaire</strong> : Pierre-Feuille-Ciseaux avec matchmaking</li>
             <li>✅ <strong>Blockchain</strong> : Scores signés sur Avalanche (testnet)</li>
           </ul>
         </div>
@@ -311,7 +305,6 @@ class Router {
             <a href="/register" data-route="/register" class="btn btn-secondary">S'inscrire</a>
           ` : `
             <a href="/game/pong" data-route="/game/pong" class="btn btn-primary">Jouer au Pong</a>
-            <a href="/game/rps" data-route="/game/rps" class="btn btn-primary">Pierre-Feuille-Ciseaux</a>
             <a href="/tournament" data-route="/tournament" class="btn btn-secondary">Tournoi</a>
             <a href="/profile" data-route="/profile" class="btn btn-secondary">Mon profil</a>
           `}
@@ -835,274 +828,6 @@ class Router {
 
   private pongRemotePage(): void {
     this.renderRemoteGamePage('manual');
-  }
-
-  private rpsPage(): void {
-    if (!authService.isAuthenticated()) {
-      this.navigateTo('/login');
-      return;
-    }
-
-    const content = document.getElementById('content');
-    if (!content) return;
-
-    content.innerHTML = `
-      <div class="game-page">
-        <h2>✊✋✌️ Pierre-Feuille-Ciseaux</h2>
-
-        <div id="rps-matchmaking" class="rps-section">
-          <h3>Matchmaking</h3>
-          <p>Trouvez un adversaire pour jouer !</p>
-          <button id="rps-join-matchmaking" class="btn btn-primary">Rejoindre le matchmaking</button>
-        </div>
-
-        <div id="rps-waiting" class="rps-section" style="display: none;">
-          <h3>⏳ Recherche d'adversaire...</h3>
-          <p>En attente d'un autre joueur...</p>
-          <button id="rps-cancel-matchmaking" class="btn btn-secondary">Annuler</button>
-        </div>
-
-        <div id="rps-game" class="rps-section" style="display: none;">
-          <h3>🎮 Match en cours</h3>
-          <p>Faites votre choix :</p>
-          <div class="rps-choices" style="display: flex; gap: 1rem; justify-content: center; margin: 2rem 0;">
-            <button id="choice-rock" class="btn btn-primary" style="font-size: 2rem; padding: 1rem 2rem;">🪨 Pierre</button>
-            <button id="choice-paper" class="btn btn-primary" style="font-size: 2rem; padding: 1rem 2rem;">📄 Feuille</button>
-            <button id="choice-scissors" class="btn btn-primary" style="font-size: 2rem; padding: 1rem 2rem;">✂️ Ciseaux</button>
-          </div>
-          <div id="rps-choice-made" style="display: none;">
-            <p style="font-size: 1.5rem;">Vous avez choisi : <span id="my-choice"></span></p>
-            <p>En attente du choix de l'adversaire...</p>
-          </div>
-        </div>
-
-        <div id="rps-result" class="rps-section" style="display: none;">
-          <h3>🏆 Résultat</h3>
-          <div id="result-content" style="margin: 2rem 0;"></div>
-          <button id="rps-play-again" class="btn btn-primary">Rejouer</button>
-          <button id="rps-back-home" class="btn btn-secondary">Retour à l'accueil</button>
-        </div>
-
-        <div id="rps-stats" style="margin-top: 3rem;">
-          <h3>📊 Statistiques</h3>
-          <div id="stats-content">
-            <p>Chargement des statistiques...</p>
-          </div>
-        </div>
-      </div>
-    `;
-
-    this.initRPSHandlers();
-    this.loadRPSStats();
-  }
-
-  private initRPSHandlers(): void {
-    // Join matchmaking
-    document.getElementById('rps-join-matchmaking')?.addEventListener('click', async () => {
-      await this.joinRPSMatchmaking();
-    });
-
-    // Cancel matchmaking
-    document.getElementById('rps-cancel-matchmaking')?.addEventListener('click', async () => {
-      try {
-        await rpsGame.leaveMatchmaking();
-        this.showRPSSection('matchmaking');
-      } catch (error) {
-        console.error('Failed to leave matchmaking:', error);
-        alert('Erreur lors de l\'annulation');
-      }
-    });
-
-    // Rock choice
-    document.getElementById('choice-rock')?.addEventListener('click', () => {
-      this.makeRPSChoice('rock');
-    });
-
-    // Paper choice
-    document.getElementById('choice-paper')?.addEventListener('click', () => {
-      this.makeRPSChoice('paper');
-    });
-
-    // Scissors choice
-    document.getElementById('choice-scissors')?.addEventListener('click', () => {
-      this.makeRPSChoice('scissors');
-    });
-
-    // Play again
-    document.getElementById('rps-play-again')?.addEventListener('click', async () => {
-      rpsGame.reset();
-      await this.joinRPSMatchmaking();
-    });
-
-    // Back home
-    document.getElementById('rps-back-home')?.addEventListener('click', () => {
-      rpsGame.reset();
-      this.navigateTo('/');
-    });
-  }
-
-  private showRPSSection(section: 'matchmaking' | 'waiting' | 'game' | 'result'): void {
-    const sections = ['rps-matchmaking', 'rps-waiting', 'rps-game', 'rps-result'];
-    sections.forEach((id) => {
-      const element = document.getElementById(id);
-      if (element) {
-        element.style.display = id === `rps-${section}` ? 'block' : 'none';
-      }
-    });
-  }
-
-  private async joinRPSMatchmaking(): Promise<void> {
-    try {
-      this.showRPSSection('waiting');
-      const result = await rpsGame.joinMatchmaking();
-
-      if (result.matchFound && result.match) {
-        // Match found immediately
-        this.showRPSSection('game');
-      } else {
-        // Waiting for opponent - poll for match
-        this.pollForRPSMatch();
-      }
-    } catch (error) {
-      console.error('Failed to join matchmaking:', error);
-      alert('Erreur lors de la connexion au matchmaking');
-      this.showRPSSection('matchmaking');
-    }
-  }
-
-  private pollForRPSMatch(): void {
-    const intervalId = window.setInterval(async () => {
-      try {
-        const status = await rpsGame.getMatchmakingStatus();
-        if (status.in_queue && status.match) {
-          // Match found!
-          clearInterval(intervalId);
-          this.showRPSSection('game');
-        }
-      } catch (error) {
-        console.error('Error polling matchmaking:', error);
-        clearInterval(intervalId);
-      }
-    }, 2000);
-
-    // Store interval for cleanup
-    this.matchmakingInterval = intervalId;
-  }
-
-  private async makeRPSChoice(choice: 'rock' | 'paper' | 'scissors'): Promise<void> {
-    const match = rpsGame.getCurrentMatch();
-    if (!match) {
-      alert('Aucun match en cours');
-      return;
-    }
-
-    try {
-      // Hide choice buttons
-      const choicesDiv = document.querySelector('.rps-choices') as HTMLElement;
-      if (choicesDiv) choicesDiv.style.display = 'none';
-
-      // Show choice made
-      const choiceMadeDiv = document.getElementById('rps-choice-made');
-      const myChoiceSpan = document.getElementById('my-choice');
-      if (choiceMadeDiv && myChoiceSpan) {
-        myChoiceSpan.textContent = rpsGame.getChoiceEmoji(choice);
-        choiceMadeDiv.style.display = 'block';
-      }
-
-      // Send choice to server
-      const result = await rpsGame.playMove(match.id, choice);
-
-      if (result.completed && result.result) {
-        // Match completed - show result
-        this.showRPSResult(result.result);
-      } else {
-        // Wait for opponent
-        rpsGame.startMatchChecking((updatedMatch) => {
-          if (updatedMatch.status === 'completed') {
-            rpsGame.stopMatchChecking();
-            this.showRPSResult(updatedMatch);
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Failed to play move:', error);
-      alert('Erreur lors de l\'envoi du choix');
-    }
-  }
-
-  private showRPSResult(match: any): void {
-    this.showRPSSection('result');
-
-    const resultContent = document.getElementById('result-content');
-    if (!resultContent) return;
-
-    const user = authService.currentUser;
-    const userId = user?.id;
-
-    let resultText = '';
-    let resultColor = '';
-
-    if (match.winner === null) {
-      resultText = '🤝 Égalité !';
-      resultColor = '#ffaa00';
-    } else if (match.winner === userId) {
-      resultText = '🎉 Vous avez gagné !';
-      resultColor = '#00ff00';
-    } else {
-      resultText = '😢 Vous avez perdu !';
-      resultColor = '#ff0000';
-    }
-
-    resultContent.innerHTML = `
-      <div style="text-align: center;">
-        <h2 style="color: ${resultColor}; font-size: 2rem;">${resultText}</h2>
-        <div style="margin: 2rem 0; font-size: 3rem;">
-          <span>Vous : ${rpsGame.getChoiceEmoji(rpsGame.getMyChoice())}</span>
-          <span style="margin: 0 2rem;">VS</span>
-          <span>Adversaire : ${rpsGame.getChoiceEmoji(match.player1 === userId ? match.player2_choice : match.player1_choice)}</span>
-        </div>
-      </div>
-    `;
-
-    // Reload stats
-    this.loadRPSStats();
-  }
-
-  private async loadRPSStats(): Promise<void> {
-    try {
-      const stats = await rpsGame.getStats();
-      const statsContent = document.getElementById('stats-content');
-      if (!statsContent) return;
-
-      const winRate = stats.total_matches > 0 ? ((stats.wins / stats.total_matches) * 100).toFixed(1) : '0.0';
-
-      statsContent.innerHTML = `
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
-          <div style="background: rgba(0,212,255,0.1); padding: 1rem; border-radius: 8px;">
-            <h4>Victoires</h4>
-            <p style="font-size: 2rem; color: #00d4ff;">${stats.wins}</p>
-          </div>
-          <div style="background: rgba(0,212,255,0.1); padding: 1rem; border-radius: 8px;">
-            <h4>Défaites</h4>
-            <p style="font-size: 2rem; color: #00d4ff;">${stats.losses}</p>
-          </div>
-          <div style="background: rgba(0,212,255,0.1); padding: 1rem; border-radius: 8px;">
-            <h4>Égalités</h4>
-            <p style="font-size: 2rem; color: #00d4ff;">${stats.draws}</p>
-          </div>
-          <div style="background: rgba(0,212,255,0.1); padding: 1rem; border-radius: 8px;">
-            <h4>Taux de victoire</h4>
-            <p style="font-size: 2rem; color: #00d4ff;">${winRate}%</p>
-          </div>
-        </div>
-      `;
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-      const statsContent = document.getElementById('stats-content');
-      if (statsContent) {
-        statsContent.innerHTML = '<p style="color: #888;">Impossible de charger les statistiques</p>';
-      }
-    }
   }
 
   private chatPage(): void {
@@ -1956,7 +1681,6 @@ const router = new Router();
 (window as any).ChatClient = ChatClient;
 (window as any).PongGame = PongGame;
 (window as any).RemotePongGame = RemotePongGame;
-(window as any).rpsGame = rpsGame;
 (window as any).tournamentManager = tournamentManager;
 
 console.log('✅ ft_transcendence loaded (TypeScript)');
