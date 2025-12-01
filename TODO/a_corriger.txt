@@ -1,37 +1,11 @@
-- Voir si on enleve pierre feuille ciseaux, car on va faire les modules suivants : 
+Modules : 
 
 1) Module Backend
 2) Blockchain
 3) AI oppenent
-4) LIve chat
+4) Live chat
 5) Remote auth
 6) Remote player
 7) Stats
 
-STATUT: CORRIGÉ (2024-11-26)
-
 Voir SECURITY_CHECKLIST.md pour la liste complète des points à vérifier avant chaque push.
-
----
-
-Les points suivants ont été corrigés:
-
-[x] 1. JWT_SECRET avec valeur par défaut faible (CRITIQUE)
-    -> Le serveur refuse maintenant de démarrer sans JWT_SECRET valide
-
-[x] 2. Pas de rate limiting (ÉLEVÉ)
-    -> @fastify/rate-limit ajouté (global: 100/min, auth: 5/min)
-
-[x] 3. Validation des inputs insuffisante (ÉLEVÉ)
-    -> Validation complète ajoutée (email, username, password, messages, blockchain)
-
-[x] 4. Tokens OAuth dans l'URL (MODÉRÉ)
-    -> URL nettoyée immédiatement avant traitement
-
-[x] 5. XSS potentiel (MODÉRÉ)
-    -> sanitizeHTML() utilisé partout où des données utilisateur sont affichées
-
----
-
-IMPORTANT: Ces corrections peuvent être accidentellement supprimées par d'autres
-développeurs. Utilisez SECURITY_CHECKLIST.md pour vérifier avant chaque push.
