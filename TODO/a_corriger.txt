@@ -9,3 +9,19 @@ Modules :
 7) Stats
 
 Voir SECURITY_CHECKLIST.md pour la liste complète des points à vérifier avant chaque push.
+
+Points à corriger en priorité
+
+XSS: données utilisateur injectées sans échappement dans frontend/src/main.ts (lines 709-721) (nom adversaire matchmaking) et frontend/src/main.ts (lines 1519-1621) (alias tournoi/bracket). Ajouter sanitizeHTML ou équivalent.
+Secrets: .env contient encore des placeholders (JWT/OAuth/Blockchain), donc pas de secrets forts en place.
+TLS: aucun certificat dans nginx/ssl/, tests HTTPS/redirect non faits; générer cert.pem/key.pem et vérifier l’accessibilité en 8443.
+WebSockets: l’auth n’est pas imposée avant actions Pong et aucun timeout/validation stricte côté serveur; chat WS ne tente pas de reconnexion automatique.
+Robustesse réseau/tests manuels non réalisés (section 11/12 laissée non cochée).
+Commandes lancées
+
+Grep secrets/password/TODO/FIXME, vérif .env non tracké, scan des innerHTML non sanitizés (cf. points ci-dessus).
+Prochaines étapes suggérées
+
+Échapper les chaînes utilisateur dans main.ts (matchmaking + tournoi).
+Remplacer les placeholders .env par des secrets forts et générer les certificats TLS.
+Durcir les WebSockets (forcer auth avant messages, validation longueur/type, timeout inactivité) et tester les scénarios réseau.

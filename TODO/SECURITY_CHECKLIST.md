@@ -74,6 +74,7 @@ function validateUsername(username) { ... }
 function validateDisplayName(displayName) { ... }
 function validatePassword(password) { ... }
 ```
+- [ ] Validation présente pour tous les autres endpoints (pas uniquement register/login) avec schémas ou équivalent
 
 ### 3.2 Chat messages (`routes/chat.js`)
 - [ ] **Lignes**: ~98-124
@@ -168,6 +169,7 @@ if (accessToken && refreshToken) {
 - [ ] **Tester**: `curl -I https://localhost:8443` retourne 200
 - [ ] **Tester**: `curl -I http://localhost:8080` redirige vers HTTPS ou refuse
 - [ ] WebSocket en WSS (pas WS): `wss://localhost:8443/ws/...`
+- [ ] Pas de fallback `ws://` quand la page est servie en HTTPS (front)
 - [ ] Aucune ressource chargée en HTTP (mixed content)
 
 ### 6.2 Configuration Nginx
@@ -207,6 +209,7 @@ db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
 - [ ] Hashés avec bcrypt
 - [ ] Jamais stockés en clair
 - [ ] Jamais retournés dans les réponses API (vérifier `serializeUser`)
+- [ ] Coût de hashage aligné production (>= 12, ajusté selon perf)
 
 ---
 
@@ -223,6 +226,7 @@ Vérifier que ces variables sont définies en production:
 - [ ] `.env` dans `.gitignore`
 - [ ] Aucun secret dans le code source
 - [ ] Aucun secret dans les logs (vérifier les console.log)
+- [ ] Contrôle pré-push: git grep pour API keys/credentials accidentels
 
 ---
 
@@ -235,6 +239,7 @@ Vérifier que ces variables sont définies en production:
 - [ ] Les connexions WebSocket vérifient le token JWT
 - [ ] Les messages sont validés côté serveur
 - [ ] Timeout configuré pour les connexions inactives
+- [ ] Fermer/refuser connexion si pas d'auth après délai ; limiter taille/messages pour éviter abuse
 
 ### 9.2 Gestion des déconnexions (Pong remote)
 - [ ] **Fichier**: `fastify-backend/src/websockets/pong.js`
@@ -255,7 +260,15 @@ Vérifier que ces variables sont définies en production:
 
 ---
 
-## 10. COMMANDES DE VÉRIFICATION
+## 10. MODULE 2FA (si activé)
+- [ ] Enrôlement 2FA (TOTP/SMS/email) avec verification du code à l’activation
+- [ ] Stockage sécurisé du secret 2FA (pas en clair côté client)
+- [ ] Vérification du code 2FA lors du login + rotation/expiration des JWT
+- [ ] Flux de récupération (codes de secours ou reset sécurisé) sans exposer le secret
+
+---
+
+## 11. COMMANDES DE VÉRIFICATION
 
 Exécuter ces commandes avant le push final:
 
@@ -277,7 +290,7 @@ grep -rn "innerHTML" frontend/src/*.ts | grep -v sanitize
 
 ---
 
-## 11. TESTS MANUELS POUR L'ÉVALUATION
+## 12. TESTS MANUELS POUR L'ÉVALUATION
 
 > Ces tests correspondent aux critères de l'évaluation officielle.
 > À faire AVANT de présenter le projet.
@@ -327,7 +340,7 @@ grep -rn "innerHTML" frontend/src/*.ts | grep -v sanitize
 
 ---
 
-## 12. CHECKLIST RAPIDE PRÉ-ÉVALUATION
+## 13. CHECKLIST RAPIDE PRÉ-ÉVALUATION
 
 Cocher avant de commencer l'évaluation:
 
@@ -348,7 +361,7 @@ Cocher avant de commencer l'évaluation:
 
 ---
 
-## HISTORIQUE DES CORRECTIONS
+## 14. HISTORIQUE DES CORRECTIONS
 
 | Date | Correction | Fichiers modifiés |
 |------|------------|-------------------|
