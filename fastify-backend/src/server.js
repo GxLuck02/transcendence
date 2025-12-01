@@ -12,6 +12,7 @@ import blockchainRoutes from './routes/blockchain.js';
 import oauthRoutes from './routes/oauth.js';
 import pongWebSocket from './websockets/pong.js';
 import chatWebSocket from './websockets/chat.js';
+import 'dotenv/config';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const PORT = process.env.PORT || 8000;

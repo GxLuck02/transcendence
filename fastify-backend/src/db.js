@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { join, dirname } from 'node:path';
 import { mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-
+console.log(">>> DB.JS EXECUTED <<<");
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
