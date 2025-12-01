@@ -451,6 +451,18 @@ class Router {
           </div>
         </div>
 
+        <div id="ai-difficulty-selector" style="display: none; margin-top: 2rem;">
+          <h3>Choisissez la difficulté :</h3>
+          <div class="mode-buttons" style="margin-top: 1rem;">
+            <button id="ai-easy" class="btn btn-success">Facile</button>
+            <button id="ai-medium" class="btn btn-warning" style="background: #ffaa00;">Moyen</button>
+            <button id="ai-hard" class="btn btn-danger" style="background: #ff4d4f;">Difficile</button>
+          </div>
+          <div style="margin-top: 1rem;">
+            <button id="back-to-mode-select" class="btn btn-secondary">Retour</button>
+          </div>
+        </div>
+
         <div id="game-container" style="display: none; text-align: center; margin-top: 2rem;">
           <canvas id="pongCanvas" width="800" height="600" style="border: 2px solid #00d4ff; background: #000;"></canvas>
           <div style="margin-top: 1rem;">
@@ -466,11 +478,30 @@ class Router {
     });
 
     document.getElementById('mode-ai')?.addEventListener('click', () => {
-      this.startPongGame('vs_ai');
+      (document.querySelector('.game-mode-selector') as HTMLElement)!.style.display = 'none';
+      document.getElementById('ai-difficulty-selector')!.style.display = 'block';
     });
 
     document.getElementById('mode-remote')?.addEventListener('click', () => {
       this.navigateTo('/game/pong/matchmaking');
+    });
+
+    // AI difficulty buttons
+    document.getElementById('ai-easy')?.addEventListener('click', () => {
+      this.startPongGame('vs_ai', 'easy');
+    });
+
+    document.getElementById('ai-medium')?.addEventListener('click', () => {
+      this.startPongGame('vs_ai', 'medium');
+    });
+
+    document.getElementById('ai-hard')?.addEventListener('click', () => {
+      this.startPongGame('vs_ai', 'hard');
+    });
+
+    document.getElementById('back-to-mode-select')?.addEventListener('click', () => {
+      document.getElementById('ai-difficulty-selector')!.style.display = 'none';
+      (document.querySelector('.game-mode-selector') as HTMLElement)!.style.display = 'block';
     });
 
     document.getElementById('back-to-modes')?.addEventListener('click', () => {
@@ -479,6 +510,7 @@ class Router {
         this.currentPongGame = null;
       }
       (document.querySelector('.game-mode-selector') as HTMLElement)!.style.display = 'block';
+      document.getElementById('ai-difficulty-selector')!.style.display = 'none';
       document.getElementById('game-container')!.style.display = 'none';
     });
   }
@@ -801,9 +833,10 @@ class Router {
   }
 
 
-  private startPongGame(mode: 'vs_local' | '2p_local' | 'vs_ai' | '2p_remote'): void {
-    // Hide mode selector, show game
+  private startPongGame(mode: 'vs_local' | '2p_local' | 'vs_ai' | '2p_remote', aiDifficulty?: 'easy' | 'medium' | 'hard'): void {
+    // Hide mode selector and AI difficulty selector, show game
     (document.querySelector('.game-mode-selector') as HTMLElement)!.style.display = 'none';
+    document.getElementById('ai-difficulty-selector')!.style.display = 'none';
     document.getElementById('game-container')!.style.display = 'block';
 
     // Stop previous game if exists
@@ -814,6 +847,7 @@ class Router {
     // Create new game
     this.currentPongGame = new PongGame('pongCanvas', {
       gameMode: mode,
+      aiDifficulty: aiDifficulty || 'medium',
       onGameOver: (result) => {
         alert(`${result.winner} a gagné ! Score: ${result.player1Score} - ${result.player2Score}`);
       }
