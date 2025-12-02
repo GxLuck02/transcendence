@@ -32,7 +32,9 @@ type LocalTournamentMatch = {
   player1: LocalParticipant;
   player2: LocalParticipant | null;
   winner: LocalParticipant | null;
-  status: 'pending' | 'completed' | 'bye';
+  status: 'pending' | 'in_progress' | 'completed' | 'bye';
+  player1Score?: number;
+  player2Score?: number;
 };
 
 class Router {
@@ -1578,11 +1580,32 @@ class Router {
 
     container.innerHTML = `<div class="bracket-rounds" style="display: grid; gap: 1rem;">${html}</div>`;
 
+    // Event listener pour "Jouer ce match"
+    container.querySelectorAll<HTMLButtonElement>('[data-play-match]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const matchId = Number(btn.getAttribute('data-match-id'));
+        this.startTournamentMatch(matchId);
+      });
+    });
+
+    // Event listener pour sélection manuelle du gagnant
     container.querySelectorAll<HTMLButtonElement>('[data-complete-match]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const matchId = Number(btn.getAttribute('data-match-id'));
         const winnerId = Number(btn.getAttribute('data-winner-id'));
         this.finishTournamentMatch(matchId, winnerId);
+      });
+    });
+
+    // Toggle pour afficher/masquer le mode manuel
+    container.querySelectorAll<HTMLButtonElement>('.toggle-manual').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const manualBtns = btn.parentElement?.querySelector('.manual-winner-btns') as HTMLElement | null;
+        if (manualBtns) {
+          const isHidden = manualBtns.style.display === 'none';
+          manualBtns.style.display = isHidden ? 'flex' : 'none';
+          btn.textContent = isHidden ? 'Masquer mode manuel' : 'Mode manuel';
+        }
       });
     });
   }
@@ -1592,32 +1615,47 @@ class Router {
     const player2 = match.player2 ? match.player2.alias : '???';
     const winner = match.winner ? match.winner.alias : null;
     const isBye = match.status === 'bye';
+    const isInProgress = match.status === 'in_progress';
 
-    const controls =
-      match.status === 'pending' && match.player2
-        ? `
-          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-            <button class="btn btn-primary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player1.id}">${player1} gagne</button>
-            <button class="btn btn-primary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player2.id}">${player2} gagne</button>
+    let controls = '';
+    if (match.status === 'pending' && match.player2) {
+      controls = `
+        <div class="match-controls">
+          <button class="btn btn-success" data-play-match data-match-id="${match.id}">Jouer ce match</button>
+          <div class="manual-winner-btns" style="display: none; gap: 0.5rem; margin-top: 0.5rem;">
+            <span style="font-size: 0.8rem; color: #888;">Ou choisir manuellement :</span>
+            <button class="btn btn-sm btn-secondary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player1.id}">${player1}</button>
+            <button class="btn btn-sm btn-secondary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player2.id}">${player2}</button>
           </div>
-        `
-        : '';
+          <button class="btn btn-sm btn-link toggle-manual" style="margin-top: 0.5rem; background: none; color: #888; text-decoration: underline; padding: 0;">Mode manuel</button>
+        </div>
+      `;
+    }
 
-    const status =
-      winner
-        ? `<span style="color: #4caf50;">Vainqueur: ${winner}</span>`
-        : isBye
-          ? `<span style="color: #ffaa00;">${player1} passe automatiquement au tour suivant</span>`
-          : `<span style="color: #888;">En attente de résultat</span>`;
+    let status = '';
+    let scoreDisplay = '';
+    if (winner) {
+      const p1Score = match.player1Score ?? '-';
+      const p2Score = match.player2Score ?? '-';
+      scoreDisplay = `<span class="match-score">${p1Score} - ${p2Score}</span>`;
+      status = `<span style="color: #4caf50;">Vainqueur: ${winner}</span>`;
+    } else if (isBye) {
+      status = `<span style="color: #ffaa00;">${player1} passe automatiquement au tour suivant</span>`;
+    } else if (isInProgress) {
+      status = `<span style="color: #00d4ff; font-weight: bold;">Match en cours...</span>`;
+    } else {
+      status = `<span style="color: #888;">En attente</span>`;
+    }
 
     return `
-      <div class="match-card" style="border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 0.75rem;">
-        <div style="display: flex; justify-content: space-between;">
-          <strong>${player1}</strong>
-          <span style="color: #00d4ff;">VS</span>
-          <strong>${player2}</strong>
+      <div class="match-card ${isInProgress ? 'match-in-progress' : ''}" data-match-card="${match.id}">
+        <div class="match-players">
+          <strong class="${winner && match.winner?.id === match.player1.id ? 'winner' : ''}">${player1}</strong>
+          <span class="vs-label">VS</span>
+          <strong class="${winner && match.winner?.id === match.player2?.id ? 'winner' : ''}">${player2}</strong>
         </div>
-        <div style="margin-top: 0.5rem;">${status}</div>
+        ${scoreDisplay ? `<div class="match-score-display">${scoreDisplay}</div>` : ''}
+        <div class="match-status">${status}</div>
         ${controls}
       </div>
     `;
@@ -1631,6 +1669,120 @@ class Router {
     } catch (error) {
       this.displayTournamentMessage((error as Error).message, 'error');
     }
+  }
+
+  private startTournamentMatch(matchId: number): void {
+    const match = tournamentManager.startMatch(matchId);
+    if (!match || !match.player2) {
+      this.displayTournamentMessage('Impossible de démarrer ce match.', 'error');
+      return;
+    }
+
+    const player1Name = match.player1.alias;
+    const player2Name = match.player2.alias;
+
+    this.displayTournamentMessage(`Match lancé : ${player1Name} vs ${player2Name}`, 'success');
+
+    // Afficher la zone de jeu dans le tournoi
+    const content = document.getElementById('content');
+    if (!content) return;
+
+    // Afficher l'interface de jeu
+    content.innerHTML = `
+      <div class="tournament-game-container">
+        <div class="tournament-game-header">
+          <h2>Match de Tournoi</h2>
+          <div class="tournament-match-info">
+            <span class="player-name player1-name">${player1Name}</span>
+            <span class="vs-separator">VS</span>
+            <span class="player-name player2-name">${player2Name}</span>
+          </div>
+          <p class="game-instructions-text">
+            <strong>${player1Name}</strong> : W/S pour monter/descendre<br>
+            <strong>${player2Name}</strong> : Flèches haut/bas<br>
+            <em>Appuyez sur Espace pour commencer</em>
+          </p>
+        </div>
+        <div class="tournament-game-canvas-container">
+          <canvas id="tournamentPongCanvas" width="800" height="600"></canvas>
+        </div>
+        <div class="tournament-game-controls">
+          <button id="cancel-tournament-match" class="btn btn-secondary">Annuler le match</button>
+        </div>
+      </div>
+    `;
+
+    // Nettoyer l'ancien jeu si existant
+    if (this.currentPongGame) {
+      this.currentPongGame.stop();
+      this.currentPongGame = null;
+    }
+
+    // Créer une nouvelle partie Pong
+    this.currentPongGame = new PongGame('tournamentPongCanvas', {
+      gameMode: '2p_local',
+      player1Name: player1Name,
+      player2Name: player2Name,
+      maxScore: 5, // Score plus court pour les tournois
+      onGameOver: (result) => {
+        // Récupérer les scores
+        const p1Score = result.player1Score;
+        const p2Score = result.player2Score;
+
+        // Déterminer le gagnant
+        const winnerName = p1Score > p2Score ? player1Name : player2Name;
+
+        // Compléter le match avec les scores
+        try {
+          tournamentManager.completeMatchWithScores(matchId, p1Score, p2Score);
+        } catch (error) {
+          console.error('Erreur lors de la complétion du match:', error);
+        }
+
+        // Afficher le résultat
+        setTimeout(() => {
+          // Nettoyer le jeu
+          if (this.currentPongGame) {
+            this.currentPongGame.stop();
+            this.currentPongGame = null;
+          }
+
+          // Afficher un message de victoire
+          content.innerHTML = `
+            <div class="tournament-result">
+              <h2>Match terminé !</h2>
+              <div class="result-score">
+                <span class="${p1Score > p2Score ? 'winner' : ''}">${player1Name}: ${p1Score}</span>
+                <span class="score-separator">-</span>
+                <span class="${p2Score > p1Score ? 'winner' : ''}">${player2Name}: ${p2Score}</span>
+              </div>
+              <p class="winner-announcement">${winnerName} remporte le match !</p>
+              <button id="back-to-tournament" class="btn btn-primary">Retour au tournoi</button>
+            </div>
+          `;
+
+          document.getElementById('back-to-tournament')?.addEventListener('click', () => {
+            this.tournamentPage();
+          });
+        }, 2000);
+      }
+    });
+
+    this.currentPongGame.start();
+
+    // Bouton pour annuler le match
+    document.getElementById('cancel-tournament-match')?.addEventListener('click', () => {
+      if (this.currentPongGame) {
+        this.currentPongGame.stop();
+        this.currentPongGame = null;
+      }
+      // Remettre le match en pending
+      const currentMatch = tournamentManager.getCurrentMatch();
+      if (currentMatch) {
+        currentMatch.status = 'pending';
+      }
+      this.tournamentPage();
+    });
   }
 
   private renderTournamentStatus(): void {
