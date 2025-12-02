@@ -42,12 +42,36 @@ export class StatsService {
   /**
    * Fetch user statistics
    * TODO: Implement API call to fetch user stats
-   */
-  async getUserStats(_userId?: number): Promise<UserStats | null> {
-    // TODO: Implement
-    console.warn('getUserStats not yet implemented');
+  */
+async getUserStats(): Promise<UserStats | null> {
+  try {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      console.error('Aucun token JWT trouvé');
+      return null;
+    }
+
+    const response = await fetch('/api/users/stats/', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.error('Failed to load user stats:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data;
+
+  } catch (error) {
+    console.error('StatsService error:', error);
     return null;
   }
+}
+
 
   /**
    * Fetch game statistics

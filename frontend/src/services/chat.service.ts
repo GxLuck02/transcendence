@@ -377,7 +377,7 @@ export async function sendDirectMessage(options: {
   recipientId: number;
   content: string;
   messageType?: 'text' | 'game_invite';
-  gameInviteType?: 'pong' | 'rps';
+  gameInviteType?: 'pong';
   gameRoomCode?: string;
 }) {
   return await chatApiFetch('/chat/messages/send/', {

@@ -53,7 +53,7 @@ export interface Match {
   score2: number;
   winner?: User;
   created_at: string;
-  game_type: 'pong' | 'pong_remote' | 'rps';
+  game_type: 'pong' | 'pong_remote';
 }
 
 export interface Tournament {
@@ -102,17 +102,6 @@ export interface PongGameState {
   };
   gameOver: boolean;
   winner?: 'left' | 'right';
-}
-
-export interface RPSChoice {
-  player_id: number;
-  choice: 'rock' | 'paper' | 'scissors';
-}
-
-export interface RPSResult {
-  winner: number | null;
-  player1_choice: string;
-  player2_choice: string;
 }
 
 // Router Types
