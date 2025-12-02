@@ -39,6 +39,7 @@ export interface PongGameOptions {
   aiDifficulty?: 'easy' | 'medium' | 'hard';
   player1Name?: string;
   player2Name?: string;
+  hideGameOverScreen?: boolean;
   onScoreUpdate?: (scores: { player1: number; player2: number }) => void;
   onGameOver?: (result: { winner: string; player1Score: number; player2Score: number }) => void;
 }

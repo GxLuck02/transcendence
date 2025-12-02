@@ -284,6 +284,17 @@ canvas {
     background: #0056b3;
 }
 
+.btn-tournament-mode {
+    background: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%);
+    color: #000;
+    font-weight: bold;
+}
+
+.btn-tournament-mode:hover {
+    background: linear-gradient(135deg, #ffaa00 0%, #ff8800 100%);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+}
+
 /* ===== Tournament Styles ===== */
 .tournament-page {
     max-width: 1200px;

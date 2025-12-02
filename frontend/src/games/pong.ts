@@ -21,8 +21,10 @@ export class PongGame {
         if (options.onGameOver) {
           options.onGameOver(result);
         }
-        // Show game over screen
-        this.renderer.showGameOverScreen();
+        // Show game over screen (unless disabled for tournament mode)
+        if (!options.hideGameOverScreen) {
+          this.renderer.showGameOverScreen();
+        }
       }
     };
 
