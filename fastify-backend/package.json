@@ -5,7 +5,8 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test:blockchain": "node test-blockchain-local.js"
   },
   "dependencies": {
     "@fastify/cookie": "^9.4.0",

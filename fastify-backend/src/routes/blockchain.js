@@ -10,25 +10,40 @@ let web3;
 let contract;
 let account;
 
-// Simple ABI for tournament score storage
+// ABI for tournament score storage contract
 const CONTRACT_ABI = [
   {
     "inputs": [
-      {"internalType": "uint256", "name": "tournamentId", "type": "uint256"},
-      {"internalType": "string", "name": "winnerName", "type": "string"},
-      {"internalType": "uint256", "name": "score", "type": "uint256"}
+      {"internalType": "uint256", "name": "_tournamentId", "type": "uint256"},
+      {"internalType": "string", "name": "_tournamentName", "type": "string"},
+      {"internalType": "string", "name": "_winnerUsername", "type": "string"},
+      {"internalType": "uint256", "name": "_winnerScore", "type": "uint256"}
     ],
-    "name": "recordTournamentWinner",
+    "name": "storeTournament",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [{"internalType": "uint256", "name": "tournamentId", "type": "uint256"}],
+    "inputs": [{"internalType": "uint256", "name": "_tournamentId", "type": "uint256"}],
     "name": "getTournamentWinner",
     "outputs": [
-      {"internalType": "string", "name": "", "type": "string"},
-      {"internalType": "uint256", "name": "", "type": "uint256"}
+      {"internalType": "string", "name": "winnerUsername", "type": "string"},
+      {"internalType": "uint256", "name": "winnerScore", "type": "uint256"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "_tournamentId", "type": "uint256"}],
+    "name": "getTournament",
+    "outputs": [
+      {"internalType": "uint256", "name": "tournamentId", "type": "uint256"},
+      {"internalType": "string", "name": "tournamentName", "type": "string"},
+      {"internalType": "address", "name": "winner", "type": "address"},
+      {"internalType": "string", "name": "winnerUsername", "type": "string"},
+      {"internalType": "uint256", "name": "winnerScore", "type": "uint256"},
+      {"internalType": "uint256", "name": "timestamp", "type": "uint256"}
     ],
     "stateMutability": "view",
     "type": "function"
@@ -63,7 +78,7 @@ export default async function blockchainRoutes(app) {
       return reply.code(503).send({ error: 'Blockchain service not configured' });
     }
 
-    const { tournament_id, winner_username, winner_score } = request.body || {};
+    const { tournament_id, tournament_name, winner_username, winner_score } = request.body || {};
 
     if (!tournament_id || !winner_username || winner_score === undefined) {
       return reply.code(400).send({ error: 'tournament_id, winner_username, and winner_score are required' });
@@ -82,10 +97,14 @@ export default async function blockchainRoutes(app) {
       return reply.code(400).send({ error: 'winner_score must be a non-negative integer' });
     }
 
+    // Tournament name is optional, use default if not provided
+    const tournamentName = tournament_name || `Tournament #${tournament_id}`;
+
     try {
       // Send transaction to blockchain
-      const tx = await contract.methods.recordTournamentWinner(
+      const tx = await contract.methods.storeTournament(
         tournament_id,
+        tournamentName,
         winner_username,
         winner_score
       ).send({

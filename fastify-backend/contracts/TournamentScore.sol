@@ -12,6 +12,7 @@ contract TournamentScore {
         string tournamentName;
         address winner;
         string winnerUsername;
+        uint256 winnerScore;
         uint256 timestamp;
         bool exists;
     }
@@ -28,6 +29,7 @@ contract TournamentScore {
         string tournamentName,
         address winner,
         string winnerUsername,
+        uint256 winnerScore,
         uint256 timestamp
     );
 
@@ -36,11 +38,13 @@ contract TournamentScore {
      * @param _tournamentId The ID of the tournament
      * @param _tournamentName The name of the tournament
      * @param _winnerUsername The username of the winner
+     * @param _winnerScore The score of the winner
      */
     function storeTournament(
         uint256 _tournamentId,
         string memory _tournamentName,
-        string memory _winnerUsername
+        string memory _winnerUsername,
+        uint256 _winnerScore
     ) public {
         require(!tournaments[_tournamentId].exists, "Tournament already stored");
 
@@ -49,6 +53,7 @@ contract TournamentScore {
             tournamentName: _tournamentName,
             winner: msg.sender,
             winnerUsername: _winnerUsername,
+            winnerScore: _winnerScore,
             timestamp: block.timestamp,
             exists: true
         });
@@ -60,6 +65,7 @@ contract TournamentScore {
             _tournamentName,
             msg.sender,
             _winnerUsername,
+            _winnerScore,
             block.timestamp
         );
     }
@@ -71,6 +77,7 @@ contract TournamentScore {
      * @return tournamentName Tournament name
      * @return winner Winner's address
      * @return winnerUsername Winner's username
+     * @return winnerScore Winner's score
      * @return timestamp Timestamp when stored
      */
     function getTournament(uint256 _tournamentId)
@@ -81,6 +88,7 @@ contract TournamentScore {
             string memory tournamentName,
             address winner,
             string memory winnerUsername,
+            uint256 winnerScore,
             uint256 timestamp
         )
     {
@@ -92,8 +100,29 @@ contract TournamentScore {
             t.tournamentName,
             t.winner,
             t.winnerUsername,
+            t.winnerScore,
             t.timestamp
         );
+    }
+
+    /**
+     * @dev Get tournament winner and score (simplified function for backend compatibility)
+     * @param _tournamentId The ID of the tournament
+     * @return winnerUsername Winner's username
+     * @return winnerScore Winner's score
+     */
+    function getTournamentWinner(uint256 _tournamentId)
+        public
+        view
+        returns (
+            string memory winnerUsername,
+            uint256 winnerScore
+        )
+    {
+        require(tournaments[_tournamentId].exists, "Tournament not found");
+
+        Tournament memory t = tournaments[_tournamentId];
+        return (t.winnerUsername, t.winnerScore);
     }
 
     /**
