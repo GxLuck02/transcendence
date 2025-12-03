@@ -10,6 +10,7 @@ import pongRoutes from './routes/pong.js';
 import chatRoutes from './routes/chat.js';
 import blockchainRoutes from './routes/blockchain.js';
 import oauthRoutes from './routes/oauth.js';
+import authRoutes from './routes/auth.js';
 import pongWebSocket from './websockets/pong.js';
 import chatWebSocket from './websockets/chat.js';
 import 'dotenv/config';
@@ -115,106 +116,11 @@ const authRateLimit = {
 
 // ==================== USER ROUTES ====================
 
-// Register
-app.post('/api/users/register/', authRateLimit, async (request, reply) => {
-  const { username, email, display_name, password, password_confirm } = request.body || {};
-
-  // Validate required fields
-  if (!username || !email || !display_name || !password || !password_confirm) {
-    return reply.code(400).send({ error: 'Missing required fields' });
-  }
-
-  // Validate username format (3-30 chars, alphanumeric + _ -)
-  if (!validateUsername(username)) {
-    return reply.code(400).send({ error: 'Username must be 3-30 characters, alphanumeric, underscore or hyphen only' });
-  }
-
-  // Validate email format
-  if (!validateEmail(email)) {
-    return reply.code(400).send({ error: 'Invalid email format' });
-  }
-
-  // Validate display name
-  if (!validateDisplayName(display_name)) {
-    return reply.code(400).send({ error: 'Display name must be 1-50 characters' });
-  }
-
-  // Validate password strength
-  if (!validatePassword(password)) {
-    return reply.code(400).send({ error: 'Password must be 8-128 characters' });
-  }
-
-  if (password !== password_confirm) {
-    return reply.code(400).send({ error: 'Passwords do not match' });
-  }
-
-  const passwordHash = await hashPassword(password);
-  try {
-    const stmt = db.prepare(`
-      INSERT INTO users (username, email, display_name, password_hash, last_seen, is_online)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0)
-    `);
-    const result = stmt.run(username.trim().toLowerCase(), email.trim().toLowerCase(), display_name.trim(), passwordHash);
-    const user = findUserById.get(result.lastInsertRowid);
-    const accessToken = app.jwt.sign({ userId: user.id }, { expiresIn: '1h' });
-    const refreshToken = app.jwt.sign({ userId: user.id }, { expiresIn: '7d' });
-    reply.send({
-      user: serializeUser(user),
-      tokens: {
-        access: accessToken,
-        refresh: refreshToken,
-      },
-    });
-  } catch (error) {
-    request.log.error(error);
-    reply.code(400).send({ error: 'Username, email ou display_name déjà utilisé' });
-  }
-});
-
-// Login
-app.post('/api/users/login/', authRateLimit, async (request, reply) => {
-  const { username, password } = request.body || {};
-  if (!username || !password) {
-    return reply.code(400).send({ error: 'Missing credentials' });
-  }
-
-  const user = findUserByUsername.get(username.trim().toLowerCase());
-  if (!user) {
-    return reply.code(401).send({ error: 'Invalid credentials' });
-  }
-  const rows = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id);
-  const isValid = await verifyPassword(rows?.password_hash, password);
-  if (!isValid) {
-    return reply.code(401).send({ error: 'Invalid credentials' });
-  }
-
-  db.prepare('UPDATE users SET is_online = 1, last_seen = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
-
-  const accessToken = app.jwt.sign({ userId: user.id }, { expiresIn: '1h' });
-  const refreshToken = app.jwt.sign({ userId: user.id }, { expiresIn: '7d' });
-  reply.send({
-    user: serializeUser(findUserById.get(user.id)),
-    tokens: {
-      access: accessToken,
-      refresh: refreshToken,
-    },
-  });
-});
-
 // Logout
 app.post('/api/users/logout/', { preValidation: [app.authenticate] }, async (request, reply) => {
   const userId = request.user.userId;
   db.prepare('UPDATE users SET is_online = 0, last_seen = CURRENT_TIMESTAMP WHERE id = ?').run(userId);
   reply.send({ message: 'Successfully logged out' });
-});
-
-// Get current user
-app.get('/api/users/me/', { preValidation: [app.authenticate] }, async (request, reply) => {
-  const user = findUserById.get(request.user.userId);
-  if (!user) {
-    return reply.code(404).send({ error: 'User not found' });
-  }
-  reply.send(serializeUser(user));
 });
 
 // Get friends list
@@ -379,6 +285,7 @@ app.register(pongRoutes);
 app.register(chatRoutes);
 app.register(blockchainRoutes);
 app.register(oauthRoutes);
+app.register(authRoutes);
 
 // ==================== REGISTER WEBSOCKETS ====================
 

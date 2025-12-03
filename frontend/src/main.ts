@@ -273,19 +273,16 @@ class Router {
     });
   }
 
-  // Pages
-  private homePage(): void {
-    const content = document.getElementById('content');
-    if (!content) return;
+private homePage(): void {
+  const content = document.getElementById('content');
+  if (!content) return;
 
-    const user = authService.currentUser;
-    // Sanitize user data to prevent XSS
-    const safeDisplayName = user ? this.sanitizeHTML(user.display_name || user.username) : '';
-    const greeting = user ? `Bienvenue, ${safeDisplayName} !` : 'Bienvenue sur ft_transcendence';
+  // Greeting par défaut
+  let greeting = 'Bienvenue sur ft_transcendence';
 
-    content.innerHTML = `
+  content.innerHTML = `
       <div class="home">
-        <h2>${greeting}</h2>
+        <h2 id="greeting">${greeting}</h2>
         <p>Le meilleur site de tournoi Pong en ligne !</p>
 
         <div style="margin-top: 2rem;">
@@ -314,7 +311,42 @@ class Router {
         </div>
       </div>
     `;
+    this.updateGreetingAfterAuth();
+}
+
+private async updateGreetingAfterAuth(): Promise<void> {
+  const token = localStorage.getItem("access_token");
+  if (!token) return; // Pas connecté → greeting par défaut
+
+  try {
+    const response = await fetch("https://localhost:8443/api/users/me/", {
+      method: "GET",
+      headers: { Authorization: "Bearer " + token },
+    });
+
+    if (response.status === 401) {
+      // User n'existe plus / token mort
+      localStorage.clear(); 
+      return;
+    }
+
+    const user = await response.json();
+    if (!user) return;
+
+    // MAJ du greeting en toute sécurité
+    const safeName = this.sanitizeHTML(user.display_name || user.username);
+    const g = document.getElementById("greeting");
+
+    if (g) g.textContent = `Bienvenue, ${safeName} !`;
+
+    // ⚠️ FACULTATIF : mettre à jour authService.currentUser proprement
+    authService.currentUser = user;
+    
+  } catch (error) {
+    // Pas de réponse = token non valide
+    localStorage.clear();
   }
+}
 
   private loginPage(): void {
     const content = document.getElementById('content');
@@ -1370,39 +1402,72 @@ class Router {
     return div.innerHTML;
   }
 
-  private profilePage(): void {
-    if (!authService.isAuthenticated()) {
+private async profilePage(): Promise<void> {
+  const content = document.getElementById('content');
+  if (!content) return;
+
+  // 🔹 État de chargement provisoire
+  content.innerHTML = `
+    <div class="profile-page">
+      <h2>Profil</h2>
+      <p>Chargement...</p>
+    </div>
+  `;
+
+  // 🔹 Vérifie le token
+  const token = localStorage.getItem("access_token");
+  if (!token) {
+    this.navigateTo('/login');
+    return;
+  }
+
+  try {
+    const response = await fetch("https://localhost:8443/api/users/me/", {
+      method: "GET",
+      headers: { Authorization: "Bearer " + token }
+    });
+
+    // ❌ Token valide mais user inexistant (DB reset)
+    if (response.status === 401) {
+      localStorage.clear();
       this.navigateTo('/login');
       return;
     }
 
-    const content = document.getElementById('content');
-    if (!content) return;
+    const user = await response.json();
 
-    const user = authService.currentUser;
+    // 🔹 Mise à jour authService
+    authService.currentUser = user;
 
-    const safeUsername = this.sanitizeHTML(user?.username || '');
-    const safeEmail = this.sanitizeHTML(user?.email || '');
-    const safeProfileDisplayName = this.sanitizeHTML(user?.display_name || '');
+    // 🔹 Sanitize des champs
+    const safeUsername = this.sanitizeHTML(user.username);
+    const safeEmail = this.sanitizeHTML(user.email);
+    const safeDisplayName = this.sanitizeHTML(user.display_name);
 
+    // 🔹 Page réelle après validation
     content.innerHTML = `
       <div class="profile-page">
         <h2>Profil</h2>
         <div class="profile-info">
           <p><strong>Nom d'utilisateur:</strong> ${safeUsername}</p>
           <p><strong>Email:</strong> ${safeEmail}</p>
-          <p><strong>Nom d'affichage:</strong> ${safeProfileDisplayName}</p>
+          <p><strong>Nom d'affichage:</strong> ${safeDisplayName}</p>
         </div>
         <button id="logout-btn" class="btn btn-danger">Se déconnecter</button>
       </div>
     `;
 
-    const logoutBtn = document.getElementById('logout-btn');
-    logoutBtn?.addEventListener('click', async () => {
+    document.getElementById('logout-btn')?.addEventListener('click', async () => {
       await authService.logout();
       this.navigateTo('/login');
     });
+
+  } catch (error) {
+    // ❌ Erreur réseau, token corrompu , backend hors ligne
+    localStorage.clear();
+    this.navigateTo('/login');
   }
+}
 
   private tournamentPage(): void {
     const content = document.getElementById('content');
