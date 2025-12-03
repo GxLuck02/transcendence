@@ -32,7 +32,9 @@ type LocalTournamentMatch = {
   player1: LocalParticipant;
   player2: LocalParticipant | null;
   winner: LocalParticipant | null;
-  status: 'pending' | 'completed' | 'bye';
+  status: 'pending' | 'in_progress' | 'completed' | 'bye';
+  player1Score?: number;
+  player2Score?: number;
 };
 
 class Router {
@@ -449,6 +451,7 @@ class Router {
             <button id="mode-local" class="btn btn-primary">2 Joueurs (Local)</button>
             <button id="mode-ai" class="btn btn-secondary">vs IA</button>
             <button id="mode-remote" class="btn btn-success">Multijoueur en ligne</button>
+            <button id="mode-tournament" class="btn btn-tournament-mode">🏆 Tournoi</button>
           </div>
         </div>
 
@@ -485,6 +488,10 @@ class Router {
 
     document.getElementById('mode-remote')?.addEventListener('click', () => {
       this.navigateTo('/game/pong/matchmaking');
+    });
+
+    document.getElementById('mode-tournament')?.addEventListener('click', () => {
+      this.navigateTo('/tournament');
     });
 
     // AI difficulty buttons
@@ -1578,11 +1585,32 @@ class Router {
 
     container.innerHTML = `<div class="bracket-rounds" style="display: grid; gap: 1rem;">${html}</div>`;
 
+    // Event listener pour "Jouer ce match"
+    container.querySelectorAll<HTMLButtonElement>('[data-play-match]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const matchId = Number(btn.getAttribute('data-match-id'));
+        this.startTournamentMatch(matchId);
+      });
+    });
+
+    // Event listener pour sélection manuelle du gagnant
     container.querySelectorAll<HTMLButtonElement>('[data-complete-match]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const matchId = Number(btn.getAttribute('data-match-id'));
         const winnerId = Number(btn.getAttribute('data-winner-id'));
         this.finishTournamentMatch(matchId, winnerId);
+      });
+    });
+
+    // Toggle pour afficher/masquer le mode manuel
+    container.querySelectorAll<HTMLButtonElement>('.toggle-manual').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const manualBtns = btn.parentElement?.querySelector('.manual-winner-btns') as HTMLElement | null;
+        if (manualBtns) {
+          const isHidden = manualBtns.style.display === 'none';
+          manualBtns.style.display = isHidden ? 'flex' : 'none';
+          btn.textContent = isHidden ? 'Masquer mode manuel' : 'Mode manuel';
+        }
       });
     });
   }
@@ -1592,32 +1620,47 @@ class Router {
     const player2 = match.player2 ? match.player2.alias : '???';
     const winner = match.winner ? match.winner.alias : null;
     const isBye = match.status === 'bye';
+    const isInProgress = match.status === 'in_progress';
 
-    const controls =
-      match.status === 'pending' && match.player2
-        ? `
-          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-            <button class="btn btn-primary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player1.id}">${player1} gagne</button>
-            <button class="btn btn-primary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player2.id}">${player2} gagne</button>
+    let controls = '';
+    if (match.status === 'pending' && match.player2) {
+      controls = `
+        <div class="match-controls">
+          <button class="btn btn-success" data-play-match data-match-id="${match.id}">Jouer ce match</button>
+          <div class="manual-winner-btns" style="display: none; gap: 0.5rem; margin-top: 0.5rem;">
+            <span style="font-size: 0.8rem; color: #888;">Ou choisir manuellement :</span>
+            <button class="btn btn-sm btn-secondary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player1.id}">${player1}</button>
+            <button class="btn btn-sm btn-secondary" data-complete-match data-match-id="${match.id}" data-winner-id="${match.player2.id}">${player2}</button>
           </div>
-        `
-        : '';
+          <button class="btn btn-sm btn-link toggle-manual" style="margin-top: 0.5rem; background: none; color: #888; text-decoration: underline; padding: 0;">Mode manuel</button>
+        </div>
+      `;
+    }
 
-    const status =
-      winner
-        ? `<span style="color: #4caf50;">Vainqueur: ${winner}</span>`
-        : isBye
-          ? `<span style="color: #ffaa00;">${player1} passe automatiquement au tour suivant</span>`
-          : `<span style="color: #888;">En attente de résultat</span>`;
+    let status = '';
+    let scoreDisplay = '';
+    if (winner) {
+      const p1Score = match.player1Score ?? '-';
+      const p2Score = match.player2Score ?? '-';
+      scoreDisplay = `<span class="match-score">${p1Score} - ${p2Score}</span>`;
+      status = `<span style="color: #4caf50;">Vainqueur: ${winner}</span>`;
+    } else if (isBye) {
+      status = `<span style="color: #ffaa00;">${player1} passe automatiquement au tour suivant</span>`;
+    } else if (isInProgress) {
+      status = `<span style="color: #00d4ff; font-weight: bold;">Match en cours...</span>`;
+    } else {
+      status = `<span style="color: #888;">En attente</span>`;
+    }
 
     return `
-      <div class="match-card" style="border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 0.75rem;">
-        <div style="display: flex; justify-content: space-between;">
-          <strong>${player1}</strong>
-          <span style="color: #00d4ff;">VS</span>
-          <strong>${player2}</strong>
+      <div class="match-card ${isInProgress ? 'match-in-progress' : ''}" data-match-card="${match.id}">
+        <div class="match-players">
+          <strong class="${winner && match.winner?.id === match.player1.id ? 'winner' : ''}">${player1}</strong>
+          <span class="vs-label">VS</span>
+          <strong class="${winner && match.winner?.id === match.player2?.id ? 'winner' : ''}">${player2}</strong>
         </div>
-        <div style="margin-top: 0.5rem;">${status}</div>
+        ${scoreDisplay ? `<div class="match-score-display">${scoreDisplay}</div>` : ''}
+        <div class="match-status">${status}</div>
         ${controls}
       </div>
     `;
@@ -1631,6 +1674,351 @@ class Router {
     } catch (error) {
       this.displayTournamentMessage((error as Error).message, 'error');
     }
+  }
+
+  private startTournamentMatch(matchId: number): void {
+    const match = tournamentManager.startMatch(matchId);
+    if (!match || !match.player2) {
+      this.displayTournamentMessage('Impossible de démarrer ce match.', 'error');
+      return;
+    }
+
+    const player1Name = match.player1.alias;
+    const player2Name = match.player2.alias;
+
+    this.displayTournamentMessage(`Match lancé : ${player1Name} vs ${player2Name}`, 'success');
+
+    // Afficher la zone de jeu dans le tournoi
+    const content = document.getElementById('content');
+    if (!content) return;
+
+    // Afficher l'interface de jeu
+    content.innerHTML = `
+      <div class="tournament-game-container">
+        <div class="tournament-game-header">
+          <h2>Match de Tournoi</h2>
+          <div class="tournament-match-info">
+            <span class="player-name player1-name">${player1Name}</span>
+            <span class="vs-separator">VS</span>
+            <span class="player-name player2-name">${player2Name}</span>
+          </div>
+          <p class="game-instructions-text">
+            <strong>${player1Name}</strong> : W/S pour monter/descendre<br>
+            <strong>${player2Name}</strong> : Flèches haut/bas<br>
+            <em>Appuyez sur Espace pour commencer</em>
+          </p>
+        </div>
+        <div class="tournament-game-canvas-container">
+          <canvas id="tournamentPongCanvas" width="800" height="600"></canvas>
+        </div>
+        <div class="tournament-game-controls">
+          <button id="cancel-tournament-match" class="btn btn-secondary">Annuler le match</button>
+        </div>
+      </div>
+    `;
+
+    // Nettoyer l'ancien jeu si existant
+    if (this.currentPongGame) {
+      this.currentPongGame.stop();
+      this.currentPongGame = null;
+    }
+
+    // Créer une nouvelle partie Pong
+    this.currentPongGame = new PongGame('tournamentPongCanvas', {
+      gameMode: '2p_local',
+      player1Name: player1Name,
+      player2Name: player2Name,
+      maxScore: 5, // Score plus court pour les tournois
+      hideGameOverScreen: true, // Désactiver l'écran de fin standard pour le tournoi
+      onGameOver: (result) => {
+        // Supprimer l'overlay standard s'il existe (sécurité)
+        const existingOverlay = document.getElementById('game-over-overlay');
+        if (existingOverlay) existingOverlay.remove();
+
+        // Récupérer les scores
+        const p1Score = result.player1Score;
+        const p2Score = result.player2Score;
+
+        // Déterminer le gagnant
+        const winnerName = p1Score > p2Score ? player1Name : player2Name;
+        const loserName = p1Score > p2Score ? player2Name : player1Name;
+
+        // Compléter le match avec les scores
+        try {
+          tournamentManager.completeMatchWithScores(matchId, p1Score, p2Score);
+        } catch (error) {
+          console.error('Erreur lors de la complétion du match:', error);
+        }
+
+        // Vérifier si c'est la finale (le tournoi est terminé)
+        const tournamentWinner = tournamentManager.getWinner();
+        const isFinal = tournamentWinner !== null;
+
+        // Nettoyer le jeu
+        if (this.currentPongGame) {
+          this.currentPongGame.stop();
+          this.currentPongGame = null;
+        }
+
+        // Afficher l'écran de résultat stylé
+        this.showTournamentMatchResult({
+          player1Name,
+          player2Name,
+          p1Score,
+          p2Score,
+          winnerName,
+          loserName,
+          isFinal
+        });
+      }
+    });
+
+    this.currentPongGame.start();
+
+    // Bouton pour annuler le match
+    document.getElementById('cancel-tournament-match')?.addEventListener('click', () => {
+      if (this.currentPongGame) {
+        this.currentPongGame.stop();
+        this.currentPongGame = null;
+      }
+      // Remettre le match en pending
+      const currentMatch = tournamentManager.getCurrentMatch();
+      if (currentMatch) {
+        currentMatch.status = 'pending';
+      }
+      this.tournamentPage();
+    });
+  }
+
+  private showTournamentMatchResult(data: {
+    player1Name: string;
+    player2Name: string;
+    p1Score: number;
+    p2Score: number;
+    winnerName: string;
+    loserName: string;
+    isFinal: boolean;
+  }): void {
+    const { player1Name, player2Name, p1Score, p2Score, winnerName, isFinal } = data;
+
+    // Créer l'overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'tournament-result-overlay';
+    overlay.innerHTML = `
+      <style>
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideIn {
+          from { transform: translateY(-50px) scale(0.9); opacity: 0; }
+          to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+        @keyframes glow {
+          0%, 100% { text-shadow: 0 0 20px #00d4ff, 0 0 40px #00d4ff; }
+          50% { text-shadow: 0 0 40px #00d4ff, 0 0 80px #00d4ff, 0 0 120px #00d4ff; }
+        }
+        @keyframes confetti {
+          0% { transform: translateY(-100%) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+        #tournament-result-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.9);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 2000;
+          animation: fadeIn 0.3s ease-out;
+        }
+        .result-card {
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%);
+          padding: 50px 70px;
+          border-radius: 20px;
+          text-align: center;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 212, 255, 0.3);
+          border: 2px solid #00d4ff;
+          animation: slideIn 0.5s ease-out;
+          max-width: 500px;
+          position: relative;
+          overflow: hidden;
+        }
+        .result-card::before {
+          content: '';
+          position: absolute;
+          top: -50%;
+          left: -50%;
+          width: 200%;
+          height: 200%;
+          background: linear-gradient(45deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+          transform: rotate(45deg);
+          animation: shine 3s infinite;
+        }
+        @keyframes shine {
+          0% { transform: translateX(-100%) rotate(45deg); }
+          100% { transform: translateX(100%) rotate(45deg); }
+        }
+        .trophy-icon {
+          font-size: 80px;
+          margin-bottom: 10px;
+          animation: pulse 2s infinite;
+        }
+        .result-title {
+          color: #00d4ff;
+          font-size: ${isFinal ? '42px' : '36px'};
+          margin: 0 0 10px 0;
+          font-weight: bold;
+          animation: ${isFinal ? 'glow 2s infinite' : 'none'};
+        }
+        .winner-name {
+          color: #fff;
+          font-size: 28px;
+          margin: 15px 0;
+          font-weight: bold;
+        }
+        .score-box {
+          background: rgba(0, 0, 0, 0.4);
+          border-radius: 15px;
+          padding: 25px;
+          margin: 25px 0;
+          border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+        .score-label {
+          color: #00d4ff;
+          font-size: 18px;
+          margin-bottom: 10px;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+        }
+        .players-vs {
+          color: #888;
+          font-size: 16px;
+          margin: 10px 0;
+        }
+        .final-score {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 20px;
+          margin-top: 15px;
+        }
+        .score-player {
+          text-align: center;
+        }
+        .score-player-name {
+          color: #aaa;
+          font-size: 14px;
+          margin-bottom: 5px;
+        }
+        .score-player-name.winner {
+          color: #4caf50;
+        }
+        .score-value {
+          font-size: 48px;
+          font-weight: bold;
+          font-family: monospace;
+        }
+        .score-value.winner {
+          color: #4caf50;
+        }
+        .score-value.loser {
+          color: #666;
+        }
+        .score-dash {
+          color: #444;
+          font-size: 36px;
+        }
+        .action-buttons {
+          display: flex;
+          gap: 15px;
+          justify-content: center;
+          margin-top: 30px;
+        }
+        .btn-tournament {
+          background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+          color: #000;
+          border: none;
+          padding: 15px 35px;
+          font-size: 18px;
+          font-weight: bold;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        .btn-tournament:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 10px 30px rgba(0, 212, 255, 0.4);
+        }
+        .btn-tournament.secondary {
+          background: linear-gradient(135deg, #333 0%, #222 100%);
+          color: #fff;
+          border: 1px solid #00d4ff;
+        }
+        .final-badge {
+          background: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%);
+          color: #000;
+          padding: 5px 20px;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: bold;
+          display: inline-block;
+          margin-bottom: 15px;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+        }
+      </style>
+      <div class="result-card">
+        ${isFinal ? '<div class="final-badge">Champion du Tournoi</div>' : ''}
+        <div class="trophy-icon">${isFinal ? '👑' : '🏆'}</div>
+        <h1 class="result-title">${isFinal ? 'CHAMPION !' : 'VICTOIRE !'}</h1>
+        <p class="winner-name">${winnerName} ${isFinal ? 'remporte le tournoi !' : 'gagne !'}</p>
+
+        <div class="score-box">
+          <div class="score-label">Score Final</div>
+          <div class="players-vs">${player1Name} vs ${player2Name}</div>
+          <div class="final-score">
+            <div class="score-player">
+              <div class="score-player-name ${p1Score > p2Score ? 'winner' : ''}">${player1Name}</div>
+              <div class="score-value ${p1Score > p2Score ? 'winner' : 'loser'}">${p1Score}</div>
+            </div>
+            <div class="score-dash">-</div>
+            <div class="score-player">
+              <div class="score-player-name ${p2Score > p1Score ? 'winner' : ''}">${player2Name}</div>
+              <div class="score-value ${p2Score > p1Score ? 'winner' : 'loser'}">${p2Score}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button id="back-to-bracket" class="btn-tournament">${isFinal ? 'Voir le classement' : 'Retour au bracket'}</button>
+          ${isFinal ? '<button id="new-tournament" class="btn-tournament secondary">Nouveau tournoi</button>' : ''}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Event listeners
+    document.getElementById('back-to-bracket')?.addEventListener('click', () => {
+      overlay.remove();
+      this.tournamentPage();
+    });
+
+    document.getElementById('new-tournament')?.addEventListener('click', () => {
+      overlay.remove();
+      tournamentManager.reset();
+      this.tournamentPage();
+    });
   }
 
   private renderTournamentStatus(): void {

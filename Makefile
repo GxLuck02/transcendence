@@ -1,4 +1,4 @@
-.PHONY: help setup ssl env frontend build up down clean fclean re logs shell
+.PHONY: all help setup ssl env frontend build up down clean fclean re logs shell
 
 # Colors for output
 GREEN = \033[0;32m
@@ -6,8 +6,18 @@ YELLOW = \033[0;33m
 RED = \033[0;31m
 NC = \033[0m # No Color
 
+# Default target - launches everything with a single command
+all: setup build up
+	@echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"
+	@echo "$(GREEN)  ✓ ft_transcendence is ready!$(NC)"
+	@echo "$(GREEN)  Access the application at: https://localhost:8443$(NC)"
+	@echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"
+
 help:
 	@echo "$(GREEN)ft_transcendence - Available commands:$(NC)"
+	@echo ""
+	@echo "  $(YELLOW)make$(NC)          - Setup + build + start (single command launch)"
+	@echo ""
 	@echo "  $(YELLOW)make setup$(NC)    - First time setup (SSL + .env + frontend)"
 	@echo "  $(YELLOW)make frontend$(NC) - Build frontend only"
 	@echo "  $(YELLOW)make build$(NC)    - Build Docker containers"
@@ -17,7 +27,7 @@ help:
 	@echo "  $(YELLOW)make shell$(NC)    - API shell (Node.js)"
 	@echo "  $(YELLOW)make clean$(NC)    - Stop and remove containers"
 	@echo "  $(YELLOW)make fclean$(NC)   - Full clean (including volumes)"
-	@echo "  $(YELLOW)make re$(NC)       - Rebuild everything"
+	@echo "  $(YELLOW)make re$(NC)       - Rebuild everything from scratch"
 
 setup: ssl env frontend
 	@echo "$(GREEN)✓ Setup complete! You can now run: make build && make up$(NC)"
@@ -70,7 +80,6 @@ up:
 	@echo "$(YELLOW)Starting all services...$(NC)"
 	docker compose up -d
 	@echo "$(GREEN)✓ Services started$(NC)"
-	@echo "$(GREEN)Access the application at: https://localhost:8443$(NC)"
 
 down:
 	@echo "$(YELLOW)Stopping all services...$(NC)"
