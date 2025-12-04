@@ -41,11 +41,29 @@ export default async function pongRoutes(app) {
   // Update match result
   app.post('/api/pong/matches/:id/result/', { preValidation: [app.authenticate] }, async (request, reply) => {
     const matchId = Number(request.params.id);
+    const userId = request.user.userId;
     const { winner_id, player1_score, player2_score } = request.body || {};
 
     const match = db.prepare('SELECT * FROM pong_matches WHERE id = ?').get(matchId);
     if (!match) {
       return reply.code(404).send({ error: 'Match not found' });
+    }
+
+    // SECURITY: Verify user is a participant in this match (IDOR protection)
+    if (match.player1_id !== userId && match.player2_id !== userId) {
+      return reply.code(403).send({ error: 'You are not a participant in this match' });
+    }
+
+    // SECURITY: Validate winner_id is one of the players
+    if (winner_id && winner_id !== match.player1_id && winner_id !== match.player2_id) {
+      return reply.code(400).send({ error: 'Invalid winner_id' });
+    }
+
+    // SECURITY: Validate score bounds
+    const score1 = Number(player1_score) || 0;
+    const score2 = Number(player2_score) || 0;
+    if (score1 < 0 || score1 > 100 || score2 < 0 || score2 > 100) {
+      return reply.code(400).send({ error: 'Invalid score values' });
     }
 
     try {
@@ -54,7 +72,7 @@ export default async function pongRoutes(app) {
         SET winner_id = ?, player1_score = ?, player2_score = ?, status = 'completed'
         WHERE id = ?
       `);
-      updateStmt.run(winner_id, player1_score || 0, player2_score || 0, matchId);
+      updateStmt.run(winner_id, score1, score2, matchId);
 
       // Update user stats
       if (winner_id === match.player1_id) {

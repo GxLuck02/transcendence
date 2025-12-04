@@ -3,8 +3,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: transcendence_redis
-    ports:
-      - "6379:6379"
+    # SECURITY: Port removed - Redis should only be accessible internally
     networks:
       - transcendence_network
     healthcheck:
@@ -19,12 +18,12 @@ services:
     container_name: transcendence_api
     volumes:
       - sqlite_data:/app/data
-    ports:
-      - "8000:8000"
+    # SECURITY: Port removed - API only accessible through Nginx reverse proxy
     environment:
       - NODE_ENV=production
       - PORT=8000
-      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      # SECURITY: JWT_SECRET must be set in .env file (no fallback)
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env file}
       - WEB3_PROVIDER_URI=${WEB3_PROVIDER_URI:-https://api.avax-test.network/ext/bc/C/rpc}
       - BLOCKCHAIN_PRIVATE_KEY=${BLOCKCHAIN_PRIVATE_KEY:-}
       - CONTRACT_ADDRESS=${CONTRACT_ADDRESS:-}

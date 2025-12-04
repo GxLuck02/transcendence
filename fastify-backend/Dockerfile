@@ -24,6 +24,14 @@ COPY src ./src
 # Create data directory for SQLite
 RUN mkdir -p /app/data
 
+# SECURITY: Create non-root user and set ownership
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
 # Expose port
 EXPOSE 8000
 

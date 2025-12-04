@@ -5,11 +5,19 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install dependencies
-COPY package.json ./
-RUN npm install
+COPY package*.json ./
+RUN npm ci
 
 # Copy source files
 COPY . .
+
+# SECURITY: Create non-root user and set ownership
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
 
 # Expose Vite dev server port
 EXPOSE 5173

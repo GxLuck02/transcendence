@@ -103,7 +103,7 @@ class Router {
       const cleanUrl = window.location.origin + window.location.pathname;
       window.history.replaceState({}, document.title, cleanUrl);
 
-      console.log('OAuth tokens detected, processing authentication...');
+      // SECURITY: Sensitive log removed - OAuth tokens should not be logged
 
       try {
         // Save tokens using private method (we need to add a public method)
@@ -127,7 +127,7 @@ class Router {
           (authService as any).refreshToken = refreshToken;
           (authService as any).currentUser = user;
 
-          console.log('✅ OAuth authentication successful:', user);
+          // SECURITY: User data log removed to prevent sensitive data exposure
 
           // Show success message
           setTimeout(() => {
@@ -1245,10 +1245,12 @@ class Router {
 
     let extra = '';
     if (message.message_type === 'game_invite' && message.game_room_code) {
+      // SECURITY: Sanitize room code to prevent XSS
+      const safeRoomCode = this.sanitizeHTML(message.game_room_code);
       extra = `
         <div style="margin-top: 0.5rem;">
           <span style="color: #00d4ff;">Invitation à une partie de Pong</span>
-          <button class="btn btn-primary btn-small" data-join-room="${message.game_room_code}" style="margin-left: 0.5rem;">Rejoindre le salon</button>
+          <button class="btn btn-primary btn-small" data-join-room="${safeRoomCode}" style="margin-left: 0.5rem;">Rejoindre le salon</button>
         </div>
       `;
     }
