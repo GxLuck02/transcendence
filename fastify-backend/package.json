@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test:blockchain": "node test-blockchain-local.js"
+    "test:blockchain": "node test-blockchain-local.js",
+    "deploy:contract": "node deploy-contract.js"
   },
   "dependencies": {
     "@fastify/cookie": "^9.4.0",
