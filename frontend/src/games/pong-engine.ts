@@ -153,18 +153,21 @@ export class PongGameEngine {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
+    if (e.key.toLowerCase() === ' ' || e.key.toLowerCase() === 'arrowup' || e.key.toLowerCase() === 'arrowdown' || e.key.toLowerCase() === 'arrowleft' || e.key.toLowerCase() === 'arrowright') {
+          e.preventDefault();
+      }
     switch (e.key.toLowerCase()) {
-      case 'w':
+      case 'arrowup':
         this.player1.upPressed = true;
         break;
-      case 's':
+      case 'arrowdown':
         this.player1.downPressed = true;
         break;
-      case 'arrowup':
+      case 'w':
         e.preventDefault();
         this.player2.upPressed = true;
         break;
-      case 'arrowdown':
+      case 's':
         e.preventDefault();
         this.player2.downPressed = true;
         break;
@@ -177,17 +180,20 @@ export class PongGameEngine {
   }
 
   private handleKeyUp(e: KeyboardEvent): void {
+    if (e.key.toLowerCase() === 'arrowup' || e.key.toLowerCase() === 'arrowdown' || e.key.toLowerCase() === 'arrowleft' || e.key.toLowerCase() === 'arrowright') {
+          e.preventDefault();
+      }
     switch (e.key.toLowerCase()) {
-      case 'w':
+      case 'arrowup':
         this.player1.upPressed = false;
         break;
-      case 's':
+      case 'arrowdown':
         this.player1.downPressed = false;
         break;
-      case 'arrowup':
+      case 'w':
         this.player2.upPressed = false;
         break;
-      case 'arrowdown':
+      case 's':
         this.player2.downPressed = false;
         break;
     }
@@ -374,7 +380,6 @@ export class PongGameEngine {
       }
       return y;
   }
-  
   private checkCollisionWithPlayer(b: Ball, player: Paddle): boolean {
     return (
       b.x - b.radius < player.x + player.width &&

@@ -273,16 +273,19 @@ class Router {
     });
   }
 
-private homePage(): void {
-  const content = document.getElementById('content');
-  if (!content) return;
+  // Pages
+  private homePage(): void {
+    const content = document.getElementById('content');
+    if (!content) return;
 
-  // Greeting par défaut
-  let greeting = 'Bienvenue sur ft_transcendence';
+    const user = authService.currentUser;
+    // Sanitize user data to prevent XSS
+    const safeDisplayName = user ? this.sanitizeHTML(user.display_name || user.username) : '';
+    const greeting = user ? `Bienvenue, ${safeDisplayName} !` : 'Bienvenue sur ft_transcendence';
 
-  content.innerHTML = `
+    content.innerHTML = `
       <div class="home">
-        <h2 id="greeting">${greeting}</h2>
+        <h2>${greeting}</h2>
         <p>Le meilleur site de tournoi Pong en ligne !</p>
 
         <div style="margin-top: 2rem;">
@@ -311,42 +314,7 @@ private homePage(): void {
         </div>
       </div>
     `;
-    this.updateGreetingAfterAuth();
-}
-
-private async updateGreetingAfterAuth(): Promise<void> {
-  const token = localStorage.getItem("access_token");
-  if (!token) return; // Pas connecté → greeting par défaut
-
-  try {
-    const response = await fetch("https://localhost:8443/api/users/me/", {
-      method: "GET",
-      headers: { Authorization: "Bearer " + token },
-    });
-
-    if (response.status === 401) {
-      // User n'existe plus / token mort
-      localStorage.clear(); 
-      return;
-    }
-
-    const user = await response.json();
-    if (!user) return;
-
-    // MAJ du greeting en toute sécurité
-    const safeName = this.sanitizeHTML(user.display_name || user.username);
-    const g = document.getElementById("greeting");
-
-    if (g) g.textContent = `Bienvenue, ${safeName} !`;
-
-    // ⚠️ FACULTATIF : mettre à jour authService.currentUser proprement
-    authService.currentUser = user;
-    
-  } catch (error) {
-    // Pas de réponse = token non valide
-    localStorage.clear();
   }
-}
 
   private loginPage(): void {
     const content = document.getElementById('content');
@@ -585,12 +553,28 @@ private async updateGreetingAfterAuth(): Promise<void> {
           </section>
 
           <section id="remote-manual" class="card" style="${focus === 'manual' ? 'border: 2px solid #00d4ff;' : ''}">
-            <h3>Rejoindre via code d'invitation</h3>
-            <form id="remote-room-form" class="auth-form" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <input type="text" id="remote-room-code" placeholder="Code de la salle (ex: ABC123)" style="flex: 1; min-width: 180px;" required />
-              <button type="submit" class="btn btn-primary">Rejoindre</button>
-            </form>
-            <p style="margin-top: 0.5rem; color: #888;">Vous recevez ce code lorsqu'un ami vous invite via le chat.</p>
+            <h3>Créer ou rejoindre un salon privé</h3>
+            
+            <div style="margin-bottom: 1.5rem;">
+              <h4>Créer un nouveau salon</h4>
+              <p style="color: #888; font-size: 0.9rem;">Créez un salon et partagez le code avec vos amis</p>
+              <button id="create-private-room" class="btn btn-success">Créer un salon privé</button>
+              <div id="created-room-info" style="display: none; margin-top: 1rem; padding: 1rem; background: rgba(0, 212, 255, 0.1); border: 1px solid #00d4ff; border-radius: 4px;">
+                <p><strong>Salon créé !</strong></p>
+                <p>Code de la salle : <code id="created-room-code" style="font-size: 1.2rem; padding: 0.3rem 0.6rem; background: #000; border-radius: 4px;"></code></p>
+                <p style="font-size: 0.9rem; color: #888;">Partagez ce code avec votre ami pour qu'il puisse rejoindre</p>
+                <button id="join-created-room" class="btn btn-primary">Rejoindre mon salon</button>
+              </div>
+            </div>
+
+            <div style="border-top: 1px solid #333; padding-top: 1.5rem;">
+              <h4>Rejoindre un salon existant</h4>
+              <form id="remote-room-form" class="auth-form" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <input type="text" id="remote-room-code" placeholder="Code de la salle (ex: ABC123)" style="flex: 1; min-width: 180px;" required />
+                <button type="submit" class="btn btn-primary">Rejoindre</button>
+              </form>
+              <p style="margin-top: 0.5rem; color: #888; font-size: 0.9rem;">Entrez le code que votre ami vous a partagé</p>
+            </div>
           </section>
         </div>
 
@@ -633,6 +617,22 @@ private async updateGreetingAfterAuth(): Promise<void> {
     document.getElementById('start-remote-match')?.addEventListener('click', () => {
       if (this.remoteMatchInfo) {
         this.launchRemoteGame(this.remoteMatchInfo.roomCode);
+      }
+    });
+
+    // Create private room button
+    document.getElementById('create-private-room')?.addEventListener('click', async () => {
+      await this.createPrivateRoom();
+    });
+
+    // Join created room button
+    document.getElementById('join-created-room')?.addEventListener('click', () => {
+      const codeElement = document.getElementById('created-room-code');
+      if (codeElement) {
+        const roomCode = codeElement.textContent?.trim();
+        if (roomCode) {
+          this.launchRemoteGame(roomCode);
+        }
       }
     });
 
@@ -832,10 +832,10 @@ private async updateGreetingAfterAuth(): Promise<void> {
 
     this.currentPongGame = new RemotePongGame(canvas.id, {
       roomCode: normalized,
-      onConnectionEstablished: (playerNumber, isHost) => {
+      onConnectionEstablished: (playerNumber: number, isHost: boolean) => {
         infoBox.textContent = `Connecté en tant que joueur ${playerNumber} (${isHost ? 'hôte' : 'invité'}). En attente d'un adversaire...`;
       },
-      onPlayerJoined: (displayName) => {
+      onPlayerJoined: (displayName: string) => {
         infoBox.textContent = `Adversaire connecté : ${displayName}. La partie démarre dès que les deux joueurs sont prêts.`;
       },
       onMatchReady: () => {
@@ -844,7 +844,7 @@ private async updateGreetingAfterAuth(): Promise<void> {
       onOpponentDisconnect: () => {
         infoBox.textContent = 'Votre adversaire s’est déconnecté.';
       },
-      onGameOver: (result) => {
+      onGameOver: (result: { winner: string; player1Score: number; player2Score: number }) => {
         infoBox.textContent = `Partie terminée. Gagnant : ${result.winner}`;
       },
     });
@@ -888,7 +888,7 @@ private async updateGreetingAfterAuth(): Promise<void> {
     this.currentPongGame = new PongGame('pongCanvas', {
       gameMode: mode,
       aiDifficulty: aiDifficulty || 'medium',
-      onGameOver: (result) => {
+      onGameOver: (result: { winner: string; player1Score: number; player2Score: number }) => {
         alert(`${result.winner} a gagné ! Score: ${result.player1Score} - ${result.player2Score}`);
       }
     });
@@ -1368,6 +1368,53 @@ private async updateGreetingAfterAuth(): Promise<void> {
     }
   }
 
+  private async createPrivateRoom(): Promise<void> {
+    try {
+      const createBtn = document.getElementById('create-private-room') as HTMLButtonElement;
+      if (createBtn) {
+        createBtn.disabled = true;
+        createBtn.textContent = 'Création en cours...';
+      }
+
+      // Create a match first (without player2_id for open room)
+      const match = await this.apiRequest('/pong/matches/create/', {
+        method: 'POST',
+        body: JSON.stringify({
+          game_mode: '2p_remote',
+        }),
+      });
+
+      // Create the room
+      const room = await this.apiRequest('/pong/rooms/create/', {
+        method: 'POST',
+        body: JSON.stringify({
+          match_id: match.id,
+        }),
+      });
+
+      // Display the room code
+      const roomCodeElement = document.getElementById('created-room-code');
+      const roomInfoDiv = document.getElementById('created-room-info');
+      
+      if (roomCodeElement && roomInfoDiv) {
+        roomCodeElement.textContent = room.room_code;
+        roomInfoDiv.style.display = 'block';
+      }
+
+      if (createBtn) {
+        createBtn.textContent = 'Créer un autre salon';
+        createBtn.disabled = false;
+      }
+    } catch (error) {
+      alert(`Erreur lors de la création du salon : ${(error as Error).message}`);
+      const createBtn = document.getElementById('create-private-room') as HTMLButtonElement;
+      if (createBtn) {
+        createBtn.textContent = 'Créer un salon privé';
+        createBtn.disabled = false;
+      }
+    }
+  }
+
   private async blockUserFromChat(userId: number): Promise<void> {
     try {
       await authService.blockUser(userId);
@@ -1402,72 +1449,39 @@ private async updateGreetingAfterAuth(): Promise<void> {
     return div.innerHTML;
   }
 
-private async profilePage(): Promise<void> {
-  const content = document.getElementById('content');
-  if (!content) return;
-
-  // 🔹 État de chargement provisoire
-  content.innerHTML = `
-    <div class="profile-page">
-      <h2>Profil</h2>
-      <p>Chargement...</p>
-    </div>
-  `;
-
-  // 🔹 Vérifie le token
-  const token = localStorage.getItem("access_token");
-  if (!token) {
-    this.navigateTo('/login');
-    return;
-  }
-
-  try {
-    const response = await fetch("https://localhost:8443/api/users/me/", {
-      method: "GET",
-      headers: { Authorization: "Bearer " + token }
-    });
-
-    // ❌ Token valide mais user inexistant (DB reset)
-    if (response.status === 401) {
-      localStorage.clear();
+  private profilePage(): void {
+    if (!authService.isAuthenticated()) {
       this.navigateTo('/login');
       return;
     }
 
-    const user = await response.json();
+    const content = document.getElementById('content');
+    if (!content) return;
 
-    // 🔹 Mise à jour authService
-    authService.currentUser = user;
+    const user = authService.currentUser;
 
-    // 🔹 Sanitize des champs
-    const safeUsername = this.sanitizeHTML(user.username);
-    const safeEmail = this.sanitizeHTML(user.email);
-    const safeDisplayName = this.sanitizeHTML(user.display_name);
+    const safeUsername = this.sanitizeHTML(user?.username || '');
+    const safeEmail = this.sanitizeHTML(user?.email || '');
+    const safeProfileDisplayName = this.sanitizeHTML(user?.display_name || '');
 
-    // 🔹 Page réelle après validation
     content.innerHTML = `
       <div class="profile-page">
         <h2>Profil</h2>
         <div class="profile-info">
           <p><strong>Nom d'utilisateur:</strong> ${safeUsername}</p>
           <p><strong>Email:</strong> ${safeEmail}</p>
-          <p><strong>Nom d'affichage:</strong> ${safeDisplayName}</p>
+          <p><strong>Nom d'affichage:</strong> ${safeProfileDisplayName}</p>
         </div>
         <button id="logout-btn" class="btn btn-danger">Se déconnecter</button>
       </div>
     `;
 
-    document.getElementById('logout-btn')?.addEventListener('click', async () => {
+    const logoutBtn = document.getElementById('logout-btn');
+    logoutBtn?.addEventListener('click', async () => {
       await authService.logout();
       this.navigateTo('/login');
     });
-
-  } catch (error) {
-    // ❌ Erreur réseau, token corrompu , backend hors ligne
-    localStorage.clear();
-    this.navigateTo('/login');
   }
-}
 
   private tournamentPage(): void {
     const content = document.getElementById('content');
@@ -1795,7 +1809,7 @@ private async profilePage(): Promise<void> {
       player2Name: player2Name,
       maxScore: 5, // Score plus court pour les tournois
       hideGameOverScreen: true, // Désactiver l'écran de fin standard pour le tournoi
-      onGameOver: (result) => {
+      onGameOver: (result: { winner: string; player1Score: number; player2Score: number }) => {
         // Supprimer l'overlay standard s'il existe (sécurité)
         const existingOverlay = document.getElementById('game-over-overlay');
         if (existingOverlay) existingOverlay.remove();
