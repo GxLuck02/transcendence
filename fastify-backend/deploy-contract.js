@@ -7,11 +7,12 @@
  * Prérequis:
  *   - Avoir des AVAX de test dans votre compte
  *   - Avoir configuré BLOCKCHAIN_PRIVATE_KEY dans .env
- *   - Avoir compilé le contrat (via Remix IDE ou solc)
+ *   - Avoir solc installé (brew install solidity sur Mac, ou npm install -g solc)
+ *   - Optionnel: CONTRACT_BYTECODE dans .env (sinon compilé automatiquement)
  */
 
 import { Web3 } from 'web3';
-import { readFileSync } from 'fs';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -21,65 +22,121 @@ const __dirname = dirname(__filename);
 // Configuration
 const WEB3_PROVIDER_URI = process.env.WEB3_PROVIDER_URI || 'https://api.avax-test.network/ext/bc/C/rpc';
 const BLOCKCHAIN_PRIVATE_KEY = process.env.BLOCKCHAIN_PRIVATE_KEY || '';
+const CONTRACT_PATH = join(__dirname, 'contracts', 'TournamentScore.sol');
 
-// ABI du contrat (identique à celui dans blockchain.js)
-const CONTRACT_ABI = [
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "_tournamentId", "type": "uint256"},
-      {"internalType": "string", "name": "_tournamentName", "type": "string"},
-      {"internalType": "string", "name": "_winnerUsername", "type": "string"},
-      {"internalType": "uint256", "name": "_winnerScore", "type": "uint256"}
-    ],
-    "name": "storeTournament",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "_tournamentId", "type": "uint256"}],
-    "name": "getTournamentWinner",
-    "outputs": [
-      {"internalType": "string", "name": "winnerUsername", "type": "string"},
-      {"internalType": "uint256", "name": "winnerScore", "type": "uint256"}
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "_tournamentId", "type": "uint256"}],
-    "name": "getTournament",
-    "outputs": [
-      {"internalType": "uint256", "name": "tournamentId", "type": "uint256"},
-      {"internalType": "string", "name": "tournamentName", "type": "string"},
-      {"internalType": "address", "name": "winner", "type": "address"},
-      {"internalType": "string", "name": "winnerUsername", "type": "string"},
-      {"internalType": "uint256", "name": "winnerScore", "type": "uint256"},
-      {"internalType": "uint256", "name": "timestamp", "type": "uint256"}
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getTournamentCount",
-    "outputs": [{"internalType": "uint256", "name": "count", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getAllTournamentIds",
-    "outputs": [{"internalType": "uint256[]", "name": "", "type": "uint256[]"}],
-    "stateMutability": "view",
-    "type": "function"
+/**
+ * Compile l'ABI du contrat Solidity
+ * @returns {Array} ABI du contrat
+ */
+function compileABI() {
+  try {
+    console.log('📦 Compilation de l\'ABI...');
+    const output = execSync(`solc --abi "${CONTRACT_PATH}"`, { encoding: 'utf-8' });
+    
+    // Parser la sortie de solc pour extraire l'ABI JSON
+    // L'ABI est généralement sur une seule ligne après "Contract JSON ABI"
+    const lines = output.split('\n');
+    
+    // Chercher la ligne qui commence par [ (ABI JSON)
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('[') && line.endsWith(']')) {
+        try {
+          const abi = JSON.parse(line);
+          console.log(`   ✅ ABI compilé (${abi.length} éléments)`);
+          return abi;
+        } catch (e) {
+          // Ce n'est pas du JSON valide, continuer
+        }
+      }
+    }
+    
+    // Utiliser une regex pour trouver le JSON dans toute la sortie
+    const jsonMatch = output.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      try {
+        const abi = JSON.parse(jsonMatch[0]);
+        console.log(`   ✅ ABI compilé (${abi.length} éléments)`);
+        return abi;
+      } catch (e) {
+        // JSON invalide
+      }
+    }
+    
+    throw new Error('Impossible de trouver l\'ABI dans la sortie de solc');
+  } catch (error) {
+    if (error.message.includes('solc: command not found') || error.message.includes('solc: No such file')) {
+      console.error('❌ ERREUR: solc n\'est pas installé');
+      console.log('');
+      console.log('📝 Installation de solc:');
+      console.log('   Sur Mac: brew install solidity');
+      console.log('   Sur Linux: sudo apt-get install solc');
+      console.log('   Ou via npm: npm install -g solc');
+      console.log('');
+      process.exit(1);
+    }
+    throw error;
   }
-];
+}
 
-// Bytecode du contrat (doit être compilé via Remix IDE ou solc)
-// Option 1: Lire depuis un fichier si vous avez compilé le contrat
-// Option 2: Utiliser le bytecode directement (voir instructions ci-dessous)
-let CONTRACT_BYTECODE = process.env.CONTRACT_BYTECODE || '';
+/**
+ * Compile le bytecode du contrat Solidity
+ * @returns {string} Bytecode du contrat (sans le préfixe 0x)
+ */
+function compileBytecode() {
+  try {
+    console.log('📦 Compilation du bytecode...');
+    const output = execSync(`solc --bin "${CONTRACT_PATH}"`, { encoding: 'utf-8' });
+    
+    // Parser la sortie de solc pour extraire le bytecode
+    // Le bytecode est sur la ligne après "Binary:"
+    const lines = output.split('\n');
+    let foundBinary = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Chercher la ligne "Binary:" qui précède le bytecode
+      if (line === 'Binary:') {
+        foundBinary = true;
+        continue;
+      }
+      
+      // Après "Binary:", la ligne suivante contient le bytecode
+      if (foundBinary && line.length > 0) {
+        // Le bytecode peut commencer par 0x ou directement par des hexadécimaux
+        let bytecode = line;
+        if (line.startsWith('0x')) {
+          bytecode = line.substring(2); // Retirer le préfixe 0x
+        }
+        
+        // Vérifier que c'est bien du bytecode (au moins 100 caractères hex)
+        if (/^[0-9a-fA-F]+$/.test(bytecode) && bytecode.length >= 100) {
+          console.log(`   ✅ Bytecode compilé (${bytecode.length} caractères)`);
+          return bytecode;
+        }
+      }
+    }
+    
+    throw new Error('Impossible de trouver le bytecode dans la sortie de solc');
+  } catch (error) {
+    if (error.message.includes('solc: command not found') || error.message.includes('solc: No such file')) {
+      console.error('❌ ERREUR: solc n\'est pas installé');
+      console.log('');
+      console.log('📝 Installation de solc:');
+      console.log('   Sur Mac: brew install solidity');
+      console.log('   Sur Linux: sudo apt-get install solc');
+      console.log('   Ou via npm: npm install -g solc');
+      console.log('');
+      process.exit(1);
+    }
+    throw error;
+  }
+}
+
+// Variables pour l'ABI et le bytecode (seront compilés au démarrage)
+let CONTRACT_ABI;
+let CONTRACT_BYTECODE;
 
 async function deployContract() {
   console.log('='.repeat(60));
@@ -101,24 +158,25 @@ async function deployContract() {
     process.exit(1);
   }
 
-  // Vérification du bytecode
-  if (!CONTRACT_BYTECODE) {
-    console.error('❌ ERREUR: CONTRACT_BYTECODE non fourni');
+  // Compiler l'ABI et le bytecode automatiquement
+  try {
+    CONTRACT_ABI = compileABI();
+    
+    // Utiliser le bytecode depuis .env si fourni, sinon le compiler
+    const bytecodeFromEnv = process.env.CONTRACT_BYTECODE || '';
+    if (bytecodeFromEnv) {
+      console.log('📦 Utilisation du bytecode depuis .env...');
+      CONTRACT_BYTECODE = bytecodeFromEnv.startsWith('0x') 
+        ? bytecodeFromEnv.substring(2) 
+        : bytecodeFromEnv;
+      console.log(`   ✅ Bytecode chargé (${CONTRACT_BYTECODE.length} caractères)`);
+    } else {
+      CONTRACT_BYTECODE = compileBytecode();
+    }
     console.log('');
-    console.log('📝 Instructions pour obtenir le bytecode:');
-    console.log('');
-    console.log('   Option 1: Via Remix IDE (recommandé)');
-    console.log('   1. Allez sur https://remix.ethereum.org/');
-    console.log('   2. Créez un nouveau fichier TournamentScore.sol');
-    console.log('   3. Copiez le contenu de contracts/TournamentScore.sol');
-    console.log('   4. Compilez avec Solidity 0.8.0+');
-    console.log('   5. Dans l\'onglet "Compilation", cliquez sur "Bytecode"');
-    console.log('   6. Copiez le "object" (sans les guillemets)');
-    console.log('   7. Ajoutez dans .env: CONTRACT_BYTECODE=0x...');
-    console.log('');
-    console.log('   Option 2: Via solc en ligne de commande');
-    console.log('   npm install -g solc');
-    console.log('   solc --bin contracts/TournamentScore.sol');
+  } catch (error) {
+    console.error('❌ ERREUR lors de la compilation:');
+    console.error(error.message);
     console.log('');
     process.exit(1);
   }
@@ -265,8 +323,8 @@ async function deployContract() {
     
     if (error.message.includes('insufficient funds')) {
       console.log('💡 Solution: Obtenez des AVAX de test: https://faucet.avax.network/');
-    } else if (error.message.includes('bytecode')) {
-      console.log('💡 Solution: Vérifiez que CONTRACT_BYTECODE est correct');
+    } else if (error.message.includes('bytecode') || error.message.includes('compilation')) {
+      console.log('💡 Solution: Vérifiez que solc est installé et que le contrat compile correctement');
     } else if (error.message.includes('private key')) {
       console.log('💡 Solution: Vérifiez que BLOCKCHAIN_PRIVATE_KEY est correcte');
     }
