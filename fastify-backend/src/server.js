@@ -11,6 +11,7 @@ import chatRoutes from './routes/chat.js';
 import blockchainRoutes from './routes/blockchain.js';
 import oauthRoutes from './routes/oauth.js';
 import authRoutes from './routes/auth.js';
+import statsRoutes from './routes/stats.js';
 import pongWebSocket from './websockets/pong.js';
 import chatWebSocket from './websockets/chat.js';
 import 'dotenv/config';
@@ -208,45 +209,6 @@ app.delete('/api/users/unblock/:id/', { preValidation: [app.authenticate] }, asy
   reply.send({ message: 'User unblocked' });
 });
 
-// Get current user stats
-app.get('/api/users/stats/', { preValidation: [app.authenticate] }, async (request, reply) => {
-  const user = findUserById.get(request.user.userId);
-  if (!user) {
-    return reply.code(404).send({ error: 'User not found' });
-  }
-  reply.send({
-    username: user.username,
-    display_name: user.display_name,
-    avatar: user.avatar,
-    wins: user.wins,
-    losses: user.losses,
-    win_rate: calcWinRate(user.wins, user.losses),
-    pong_wins: user.pong_wins,
-    pong_losses: user.pong_losses,
-    pong_win_rate: calcWinRate(user.pong_wins, user.pong_losses),
-  });
-});
-
-// Get user stats by ID
-app.get('/api/users/:id/stats/', { preValidation: [app.authenticate] }, async (request, reply) => {
-  const userId = Number(request.params.id);
-  const user = findUserById.get(userId);
-  if (!user) {
-    return reply.code(404).send({ error: 'User not found' });
-  }
-  reply.send({
-    username: user.username,
-    display_name: user.display_name,
-    avatar: user.avatar,
-    wins: user.wins,
-    losses: user.losses,
-    win_rate: calcWinRate(user.wins, user.losses),
-    pong_wins: user.pong_wins,
-    pong_losses: user.pong_losses,
-    pong_win_rate: calcWinRate(user.pong_wins, user.pong_losses),
-  });
-});
-
 // Get profile
 app.get('/api/users/profile/', { preValidation: [app.authenticate] }, async (request, reply) => {
   const user = findUserById.get(request.user.userId);
@@ -286,6 +248,7 @@ app.register(chatRoutes);
 app.register(blockchainRoutes);
 app.register(oauthRoutes);
 app.register(authRoutes);
+app.register(statsRoutes);
 
 // ==================== REGISTER WEBSOCKETS ====================
 

@@ -50,4 +50,23 @@ for (const t of tables) {
   printTable(t.name, rows);
 }
 
+try {
+  const userStats = db.prepare(`
+    SELECT 
+      id,
+      username,
+      wins,
+      losses,
+      (CASE WHEN (wins + losses) = 0 THEN 0 ELSE ROUND(wins * 100.0 / (wins + losses), 1) END) AS win_rate,
+      pong_wins,
+      pong_losses,
+      (CASE WHEN (pong_wins + pong_losses) = 0 THEN 0 ELSE ROUND(pong_wins * 100.0 / (pong_wins + pong_losses), 1) END) AS pong_win_rate
+    FROM users
+  `).all();
+
+  printTable("USER STATS", userStats);
+} catch (e) {
+  console.log("\n⚠️ Impossible d'afficher les stats (table users absente ?)\n");
+}
+
 console.log("\n📦 Base de données affichée avec succès.\n");
