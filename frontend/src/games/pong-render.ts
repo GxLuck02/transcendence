@@ -11,7 +11,7 @@ export class PongGameRenderer {
   private engine: PongGameEngine;
   private playerNamesContainer: HTMLElement | null = null;
 
-  constructor(canvasId: string, engine: PongGameEngine) {
+  constructor(canvasId: string, engine: PongGameEngine, hidePlayerNames: boolean = false) {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
     if (!canvas) {
       throw new Error(`Canvas with id "${canvasId}" not found`);
@@ -30,8 +30,10 @@ export class PongGameRenderer {
     this.canvas.width = engine.width;
     this.canvas.height = engine.height;
 
-    // Create player names display
-    this.createPlayerNamesDisplay();
+    // Create player names display (unless hidden for tournament mode)
+    if (!hidePlayerNames) {
+      this.createPlayerNamesDisplay();
+    }
   }
 
   private createPlayerNamesDisplay(): void {

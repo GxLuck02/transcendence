@@ -29,7 +29,7 @@ export class PongGame {
     };
 
     this.engine = new PongGameEngine(engineOptions);
-    this.renderer = new PongGameRenderer(canvasId, this.engine);
+    this.renderer = new PongGameRenderer(canvasId, this.engine, options.hidePlayerNames);
 
     // Start game loop
     this.gameLoop();

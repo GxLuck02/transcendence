@@ -1641,13 +1641,13 @@ class Router {
 
     let status = '';
     let scoreDisplay = '';
-    if (winner) {
+    if (isBye) {
+      status = `<span style="color: #ffaa00;">${player1} passe automatiquement au tour suivant</span>`;
+    } else if (winner) {
       const p1Score = match.player1Score ?? '-';
       const p2Score = match.player2Score ?? '-';
       scoreDisplay = `<span class="match-score">${p1Score} - ${p2Score}</span>`;
       status = `<span style="color: #4caf50;">Vainqueur: ${winner}</span>`;
-    } else if (isBye) {
-      status = `<span style="color: #ffaa00;">${player1} passe automatiquement au tour suivant</span>`;
     } else if (isInProgress) {
       status = `<span style="color: #00d4ff; font-weight: bold;">Match en cours...</span>`;
     } else {
@@ -1697,24 +1697,26 @@ class Router {
     // Afficher l'interface de jeu
     content.innerHTML = `
       <div class="tournament-game-container">
-        <div class="tournament-game-header">
-          <h2>Match de Tournoi</h2>
-          <div class="tournament-match-info">
-            <span class="player-name player1-name">${player1Name}</span>
-            <span class="vs-separator">VS</span>
-            <span class="player-name player2-name">${player2Name}</span>
+        <div class="tournament-versus-header">
+          <div class="versus-player versus-player1">
+            <span class="versus-avatar">${player1Name.charAt(0).toUpperCase()}</span>
+            <span class="versus-name">${player1Name}</span>
+            <span class="versus-keys">W / S</span>
           </div>
-          <p class="game-instructions-text">
-            <strong>${player1Name}</strong> : W/S pour monter/descendre<br>
-            <strong>${player2Name}</strong> : Flèches haut/bas<br>
-            <em>Appuyez sur Espace pour commencer</em>
-          </p>
+          <div class="versus-center">
+            <span class="versus-vs">VS</span>
+          </div>
+          <div class="versus-player versus-player2">
+            <span class="versus-keys">&uarr; / &darr;</span>
+            <span class="versus-name">${player2Name}</span>
+            <span class="versus-avatar">${player2Name.charAt(0).toUpperCase()}</span>
+          </div>
         </div>
         <div class="tournament-game-canvas-container">
           <canvas id="tournamentPongCanvas" width="800" height="600"></canvas>
         </div>
         <div class="tournament-game-controls">
-          <button id="cancel-tournament-match" class="btn btn-secondary">Annuler le match</button>
+          <button id="cancel-tournament-match" class="btn btn-danger">Annuler le match</button>
         </div>
       </div>
     `;
@@ -1732,6 +1734,7 @@ class Router {
       player2Name: player2Name,
       maxScore: 5, // Score plus court pour les tournois
       hideGameOverScreen: true, // Désactiver l'écran de fin standard pour le tournoi
+      hidePlayerNames: true, // Utiliser le header personnalisé du tournoi
       onGameOver: (result) => {
         // Supprimer l'overlay standard s'il existe (sécurité)
         const existingOverlay = document.getElementById('game-over-overlay');
@@ -2039,6 +2042,29 @@ class Router {
 
     winnerBox.style.display = 'none';
 
+    // Vérifier si un match est en cours
+    const currentMatch = tournamentManager.getCurrentMatch() as LocalTournamentMatch | null;
+    if (currentMatch && currentMatch.player2) {
+      nextMatchBox.innerHTML = `
+        <div class="match-in-progress-notice">
+          <div class="match-in-progress-info">
+            <span class="match-live-badge">EN COURS</span>
+            <span>${currentMatch.player1.alias} vs ${currentMatch.player2.alias}</span>
+          </div>
+          <button id="resume-tournament-match" class="btn btn-success">Reprendre le match</button>
+        </div>
+      `;
+
+      // Event listener pour reprendre le match
+      const resumeBtn = document.getElementById('resume-tournament-match');
+      if (resumeBtn) {
+        resumeBtn.addEventListener('click', () => {
+          this.resumeTournamentMatch(currentMatch);
+        });
+      }
+      return;
+    }
+
     const nextMatch = tournamentManager.getNextMatch() as LocalTournamentMatch | undefined;
     if (!nextMatch) {
       nextMatchBox.textContent = 'Aucun match planifié. Lancez le tournoi pour commencer.';
@@ -2049,6 +2075,105 @@ class Router {
       nextMatchBox.textContent = `${nextMatch.player1.alias} bénéficie d'un passage automatique au prochain tour.`;
     } else {
       nextMatchBox.textContent = `Prochaine rencontre : ${nextMatch.player1.alias} vs ${nextMatch.player2.alias}`;
+    }
+  }
+
+  private resumeTournamentMatch(match: LocalTournamentMatch): void {
+    if (!match.player2) return;
+
+    const player1Name = match.player1.alias;
+    const player2Name = match.player2.alias;
+    const matchId = match.id;
+
+    const content = document.getElementById('content');
+    if (!content) return;
+
+    // Afficher l'interface de jeu (même que startTournamentMatch mais sans démarrer un nouveau match)
+    content.innerHTML = `
+      <div class="tournament-game-container">
+        <div class="tournament-versus-header">
+          <div class="versus-player versus-player1">
+            <span class="versus-avatar">${player1Name.charAt(0).toUpperCase()}</span>
+            <span class="versus-name">${player1Name}</span>
+            <span class="versus-keys">W / S</span>
+          </div>
+          <div class="versus-center">
+            <span class="versus-vs">VS</span>
+          </div>
+          <div class="versus-player versus-player2">
+            <span class="versus-keys">&uarr; / &darr;</span>
+            <span class="versus-name">${player2Name}</span>
+            <span class="versus-avatar">${player2Name.charAt(0).toUpperCase()}</span>
+          </div>
+        </div>
+        <div class="tournament-game-canvas-container">
+          <canvas id="tournamentPongCanvas" width="800" height="600"></canvas>
+        </div>
+        <div class="tournament-game-controls">
+          <button id="cancel-tournament-match" class="btn btn-danger">Annuler le match</button>
+        </div>
+      </div>
+    `;
+
+    // Nettoyer l'ancien jeu si existant
+    if (this.currentPongGame) {
+      this.currentPongGame.stop();
+      this.currentPongGame = null;
+    }
+
+    // Créer une nouvelle partie Pong
+    this.currentPongGame = new PongGame('tournamentPongCanvas', {
+      gameMode: '2p_local',
+      player1Name: player1Name,
+      player2Name: player2Name,
+      maxScore: 5,
+      hideGameOverScreen: true,
+      hidePlayerNames: true, // Utiliser le header personnalisé du tournoi
+      onGameOver: (result) => {
+        const existingOverlay = document.getElementById('game-over-overlay');
+        if (existingOverlay) existingOverlay.remove();
+
+        const p1Score = result.player1Score;
+        const p2Score = result.player2Score;
+        const winnerName = p1Score > p2Score ? player1Name : player2Name;
+        const loserName = p1Score > p2Score ? player2Name : player1Name;
+
+        try {
+          tournamentManager.completeMatchWithScores(matchId, p1Score, p2Score);
+        } catch (error) {
+          console.error('Erreur lors de la complétion du match:', error);
+        }
+
+        const tournamentWinner = tournamentManager.getWinner();
+        const isFinal = tournamentWinner !== null;
+
+        if (this.currentPongGame) {
+          this.currentPongGame.stop();
+          this.currentPongGame = null;
+        }
+
+        this.showTournamentMatchResult({
+          player1Name,
+          player2Name,
+          p1Score,
+          p2Score,
+          winnerName,
+          loserName,
+          isFinal
+        });
+      },
+    });
+
+    // Bouton annuler
+    const cancelBtn = document.getElementById('cancel-tournament-match');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        if (this.currentPongGame) {
+          this.currentPongGame.stop();
+          this.currentPongGame = null;
+        }
+        this.pongPage();
+      });
     }
   }
 
