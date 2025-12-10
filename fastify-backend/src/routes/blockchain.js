@@ -104,13 +104,17 @@ export default async function blockchainRoutes(app) {
 
     // Tournament name is optional, use default if not provided
     const tournamentName = tournament_name || `Tournament #${tournament_id}`;
+    
+    // Formater winner_username pour l'affichage dans l'input data
+    // L'explorateur affichera "winner = ced" au lieu de juste "ced"
+    const formattedWinner = `winner = ${winner_username}`;
 
     try {
       // Send transaction to blockchain
       const tx = await contract.methods.storeTournament(
         tournament_id,
         tournamentName,
-        winner_username,
+        formattedWinner,
         winner_score
       ).send({
         from: account.address,
