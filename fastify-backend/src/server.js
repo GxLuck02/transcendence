@@ -41,13 +41,29 @@ app.register(fastifyRateLimit, {
 // JWT configuration
 app.register(fastifyJwt, {
   secret: JWT_SECRET,
+  // Explicitly configure where to find the token
+  decode: { complete: true },
+  cookie: {
+    cookieName: 'token'
+  }
 });
 
 // Authentication decorator
 app.decorate('authenticate', async function (request, reply) {
   try {
+    // Log the Authorization header for debugging
+    const authHeader = request.headers.authorization;
+    if (!authHeader) {
+      request.log.warn('No Authorization header found');
+      return reply.code(401).send({ error: 'Invalid or missing token' });
+    }
+    if (!authHeader.startsWith('Bearer ')) {
+      request.log.warn('Authorization header does not start with Bearer');
+      return reply.code(401).send({ error: 'Invalid or missing token' });
+    }
     await request.jwtVerify();
   } catch (err) {
+    request.log.error('JWT verification failed:', err.message);
     reply.code(401).send({ error: 'Invalid or missing token' });
   }
 });
