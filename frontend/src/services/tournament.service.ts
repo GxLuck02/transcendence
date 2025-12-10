@@ -15,7 +15,9 @@ interface TournamentMatch {
   player1: Participant;
   player2: Participant | null;
   winner: Participant | null;
-  status: 'pending' | 'completed' | 'bye';
+  status: 'pending' | 'in_progress' | 'completed' | 'bye';
+  player1Score?: number;
+  player2Score?: number;
 }
 
 interface Tournament {
@@ -33,6 +35,9 @@ export class TournamentManager {
   private matches: TournamentMatch[] = [];
   private currentRound: number = 1;
   private winner: Participant | null = null;
+  private currentMatchId: number | null = null;
+  private onMatchStart: ((match: TournamentMatch) => void) | null = null;
+  private onMatchEnd: ((match: TournamentMatch) => void) | null = null;
 
   public async createTournament(name: string): Promise<Tournament> {
     try {
@@ -132,7 +137,40 @@ export class TournamentManager {
     return this.matches.find((m) => m.status === 'pending');
   }
 
-  public completeMatch(matchId: number, winnerId: number): TournamentMatch {
+  public startMatch(matchId: number): TournamentMatch | null {
+    const match = this.matches.find((m) => m.id === matchId);
+    if (!match || match.status !== 'pending' || !match.player2) {
+      return null;
+    }
+
+    match.status = 'in_progress';
+    this.currentMatchId = matchId;
+
+    if (this.onMatchStart) {
+      this.onMatchStart(match);
+    }
+
+    return match;
+  }
+
+  public getCurrentMatch(): TournamentMatch | null {
+    if (this.currentMatchId === null) return null;
+    return this.matches.find((m) => m.id === this.currentMatchId) || null;
+  }
+
+  public isMatchInProgress(): boolean {
+    return this.currentMatchId !== null;
+  }
+
+  public setOnMatchStart(callback: ((match: TournamentMatch) => void) | null): void {
+    this.onMatchStart = callback;
+  }
+
+  public setOnMatchEnd(callback: ((match: TournamentMatch) => void) | null): void {
+    this.onMatchEnd = callback;
+  }
+
+  public completeMatch(matchId: number, winnerId: number, player1Score?: number, player2Score?: number): TournamentMatch {
     const match = this.matches.find((m) => m.id === matchId);
     if (!match) {
       throw new Error('Match not found');
@@ -147,9 +185,21 @@ export class TournamentManager {
 
     match.winner = winner;
     match.status = 'completed';
+    match.player1Score = player1Score;
+    match.player2Score = player2Score;
+
+    // Clear current match
+    if (this.currentMatchId === matchId) {
+      this.currentMatchId = null;
+    }
 
     // Eliminate loser
     loser.eliminated = true;
+
+    // Call onMatchEnd callback
+    if (this.onMatchEnd) {
+      this.onMatchEnd(match);
+    }
 
     // Check if round is complete
     const roundMatches = this.matches.filter((m) => m.round === this.currentRound);
@@ -169,6 +219,16 @@ export class TournamentManager {
     }
 
     return match;
+  }
+
+  public completeMatchWithScores(matchId: number, player1Score: number, player2Score: number): TournamentMatch {
+    const match = this.matches.find((m) => m.id === matchId);
+    if (!match || !match.player2) {
+      throw new Error('Match not found or invalid');
+    }
+
+    const winnerId = player1Score > player2Score ? match.player1.id : match.player2.id;
+    return this.completeMatch(matchId, winnerId, player1Score, player2Score);
   }
 
   public getCurrentRoundMatches(): TournamentMatch[] {
@@ -214,6 +274,7 @@ export class TournamentManager {
     this.matches = [];
     this.currentRound = 1;
     this.winner = null;
+    this.currentMatchId = null;
   }
 
   private getAuthToken(): string {

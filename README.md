@@ -1,334 +1,257 @@
 # ft_transcendence
 
-> Projet final de l'école 42 : Site web de tournoi Pong multijoueur avec fonctionnalités avancées
+A full-stack multiplayer Pong web application with real-time gameplay, tournaments, live chat, and blockchain score recording.
 
-## ✅ Conformité au Sujet
+> Final project of the 42 school curriculum
 
-Ce projet est **100% conforme** au sujet ft_transcendence avec backend **Fastify + Node.js**.
+## Overview
 
-### ✅ Technologies CONFORMES
-- **Backend:** Fastify 4.x avec Node.js ✅ (Module majeur "Use a framework to build the backend")
-- **Database:** SQLite via better-sqlite3 ✅ (Module mineur "Use a database for the backend")
-- **Frontend:** TypeScript SPA avec Vite ✅
-- **Blockchain:** Avalanche Fuji testnet (C-Chain) ✅
-- **Smart Contracts:** Solidity 0.8.0 ✅
-- **WebSockets:** @fastify/websocket pour Pong et Chat ✅
-- **Auth:** JWT + OAuth 2.0 (42 + GitHub) ✅
+ft_transcendence is a single-page application that allows users to play Pong against each other in real-time, participate in tournaments, chat with other players, and record tournament results on the Avalanche blockchain.
 
-## 📋 Description
+### Key Features
 
-Site web permettant de jouer au Pong avec système de tournois complet, chat en temps réel avec WebSocket, adversaire IA, gestion complète des utilisateurs, et jeu Rock-Paper-Scissors avec matchmaking.
+- **Real-time Multiplayer Pong** - Play against friends via WebSocket with server-authoritative game logic
+- **Local Multiplayer** - Two players on the same keyboard
+- **AI Opponent** - Three difficulty levels with trajectory prediction
+- **Tournament System** - Dynamic bracket generation with elimination rounds
+- **Live Chat** - Global chat room and direct messages with game invitations
+- **Blockchain Integration** - Tournament scores recorded on Avalanche testnet
+- **OAuth Authentication** - Sign in with 42 or GitHub accounts
 
-## Modules Implémentés
+## Tech Stack
 
-### Partie Obligatoire (25%)
-- ✅ Jeu Pong fonctionnel (2 joueurs locaux, vs IA)
-- ✅ Système de tournoi avec brackets et élimination directe
-- ✅ Inscription des joueurs avec alias
-- ✅ Matchmaking pour tournois
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | TypeScript, Vite, Custom SPA Router |
+| **Backend** | Node.js, Fastify 4.x |
+| **Database** | SQLite (better-sqlite3) |
+| **Real-time** | WebSocket (@fastify/websocket) |
+| **Authentication** | JWT, bcrypt, OAuth 2.0 |
+| **Blockchain** | Avalanche Fuji testnet, Solidity, Web3.js |
+| **Infrastructure** | Docker, Nginx, Redis |
 
-### 🏆 Modules Majeurs (70 points)
-1. **Backend Framework** - Fastify + Node.js (10 pts) ✅
-2. **Standard User Management** - Inscription, profils, amis, historique (10 pts) ✅
-3. **Remote Players** - Multiplayer Pong distant avec WebSocket (10 pts) ✅
-4. **Live Chat** - Chat temps réel avec WebSockets (10 pts) ✅
-5. **AI Opponent** - Adversaire IA avec 3 niveaux de difficulté (10 pts) ✅
-6. **Additional Game** - Rock-Paper-Scissors avec matchmaking (10 pts) ✅
-7. **Blockchain** - Avalanche Fuji testnet avec Solidity (10 pts) ✅
+## Quick Start
 
-### 📦 Modules Mineurs (15 points)
-8. **SQLite Database** (5 pts) ✅
-9. **TypeScript Frontend** (5 pts) ✅
-10. **Remote Authentication** - OAuth 2.0 avec 42 + GitHub (5 pts) ✅
+### Prerequisites
 
-## 🚀 Stack Technique
+- Docker (v20.10+)
+- Docker Compose (v2.0+)
 
-### Backend (Fastify)
-- **Framework:** Fastify 4.x (Node.js)
-- **Database:** SQLite (better-sqlite3)
-- **Auth:** JWT (@fastify/jwt) + bcrypt
-- **WebSockets:** @fastify/websocket
-- **Blockchain:** Web3.js (Avalanche)
-- **OAuth:** 42 API + GitHub
+### Installation
 
-### Frontend
-- **Language:** TypeScript
-- **Build:** Vite
-- **Routing:** SPA Router custom
-- **WebSocket:** Native WebSocket API
+```bash
+# Clone the repository
+git clone <repository_url>
+cd transcendence
 
-### Infrastructure
-- **Container:** Docker + Docker Compose
-- **Proxy:** Nginx avec SSL/TLS
-- **Cache:** Redis (pour WebSocket scaling)
+# Build and start all services
+make
+```
 
-## 📁 Structure du Projet
+The application will be available at **https://localhost:8443**
+
+> Note: Accept the self-signed SSL certificate in your browser
+
+### Development Commands
+
+```bash
+make          # Setup + build + start (single command)
+make up       # Start services
+make down     # Stop services
+make logs     # View real-time logs
+make clean    # Stop and remove containers
+make re       # Full rebuild
+```
+
+## Project Structure
 
 ```
 transcendence/
-├── fastify-backend/              # Backend Fastify + Node.js ✅
-│   ├── src/
-│   │   ├── server.js            # Serveur principal + routes users
-│   │   ├── db.js                # SQLite + migrations
-│   │   ├── utils/
-│   │   │   └── password.js      # bcrypt hashing
-│   │   ├── routes/
-│   │   │   ├── pong.js          # Matchmaking + matches
-│   │   │   ├── chat.js          # Messages + notifications
-│   │   │   ├── blockchain.js    # Avalanche Web3
-│   │   │   ├── rps.js           # Rock-Paper-Scissors
-│   │   │   └── oauth.js         # OAuth 2.0 (42 + GitHub)
-│   │   └── websockets/
-│   │       ├── pong.js          # WebSocket Pong remote
-│   │       └── chat.js          # WebSocket chat global
-│   ├── data/                    # SQLite database
-│   ├── package.json
-│   ├── Dockerfile
-│   └── README.md
-├── frontend/                     # SPA TypeScript
-│   ├── src/
-│   │   ├── main.ts              # Router + App principale
-│   │   ├── services/
-│   │   │   ├── auth.service.ts
-│   │   │   ├── chat.service.ts
-│   │   │   └── tournament.service.ts
-│   │   └── games/
-│   │       ├── pong-remote.ts   # Pong avec WebSocket
-│   │       └── pong-ai.ts       # Pong vs IA
-│   ├── package.json
-│   └── vite.config.ts
+├── fastify-backend/
+│   └── src/
+│       ├── server.js              # Main server, user routes, JWT auth
+│       ├── db.js                  # SQLite schema and migrations
+│       ├── routes/
+│       │   ├── pong.js            # Match management, matchmaking
+│       │   ├── chat.js            # Messages, notifications
+│       │   ├── oauth.js           # OAuth 2.0 (42 + GitHub)
+│       │   └── blockchain.js      # Avalanche integration
+│       └── websockets/
+│           ├── pong.js            # Remote game rooms
+│           ├── pong_engine_server.js  # Server-side game physics
+│           └── chat.js            # Global chat
+├── frontend/
+│   └── src/
+│       ├── main.ts                # SPA router and pages
+│       ├── services/              # Auth, chat, tournament services
+│       ├── games/                 # Pong engine, AI, remote play
+│       └── utils/
+│           └── validation.ts      # Input validation
 ├── nginx/
-│   ├── nginx.conf               # Proxy vers Fastify
-│   └── ssl/                     # Certificats SSL
-├── docker-compose.yml           # Redis + Fastify + Nginx
-├── Makefile
-└── README.md
+│   └── nginx.conf                 # SSL termination, reverse proxy
+├── docker-compose.yml
+└── Makefile
 ```
 
-## 🛠️ Installation et Lancement
+## Modules Implemented
 
-### Prérequis
-- **Docker** (v20.10+)
-- **Docker Compose** (v2.0+)
+### Mandatory Part (25%)
+- Pong game with two local players
+- Tournament system with player aliases
+- Match announcements and bracket progression
+- Single-page application with browser navigation support
 
-### Setup Rapide
+### Major Modules (60 points)
+
+| Module | Description |
+|--------|-------------|
+| **Backend Framework** | Fastify + Node.js with full REST API |
+| **Remote Players** | WebSocket-based multiplayer with server-side game logic |
+| **Live Chat** | Real-time messaging, direct messages, game invitations |
+| **AI Opponent** | Three difficulty levels, trajectory prediction algorithm |
+| **Remote Authentication** | OAuth 2.0 with 42 and GitHub providers |
+| **Blockchain** | Tournament scores on Avalanche Fuji testnet |
+
+### Minor Modules (10 points)
+
+| Module | Description |
+|--------|-------------|
+| **Database** | SQLite with better-sqlite3 |
+| **Stats Dashboard** | Player statistics and match history |
+
+## Configuration
+
+### OAuth Setup (Optional)
+
+Create or edit the `.env` file:
 
 ```bash
-# 1. Cloner le repository
-git clone <repo_url>
-cd transcendence
-
-# 2. Setup automatique (SSL + .env + build frontend)
-make setup
-
-# 3. Build et lancer
-make build
-make up
-```
-
-Le site sera accessible sur : **https://localhost:8443**
-
-⚠️ **Important:** Acceptez le certificat SSL auto-signé dans votre navigateur
-
-### Configuration OAuth (Optionnel)
-
-Pour activer OAuth 2.0 (42 ou GitHub), éditez le fichier `.env` :
-
-```bash
-# OAuth 42
-OAUTH42_CLIENT_ID=votre_client_id
-OAUTH42_SECRET=votre_secret
+# 42 OAuth
+OAUTH42_CLIENT_ID=your_client_id
+OAUTH42_SECRET=your_secret
 OAUTH42_REDIRECT_URI=https://localhost:8443/api/auth/oauth/42/callback/
 
-# OAuth GitHub (alternative)
-GITHUB_CLIENT_ID=votre_client_id
-GITHUB_CLIENT_SECRET=votre_secret
+# GitHub OAuth
+GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_SECRET=your_secret
 GITHUB_REDIRECT_URI=https://localhost:8443/api/auth/oauth/github/callback/
 ```
 
-### Configuration Blockchain (Optionnel)
+### Blockchain Setup (Optional)
 
 ```bash
 # Avalanche Fuji testnet
 WEB3_PROVIDER_URI=https://api.avax-test.network/ext/bc/C/rpc
-BLOCKCHAIN_PRIVATE_KEY=votre_cle_privee_sans_0x
-CONTRACT_ADDRESS=adresse_du_smart_contract
+BLOCKCHAIN_PRIVATE_KEY=your_private_key_without_0x
+CONTRACT_ADDRESS=deployed_contract_address
 ```
 
-1. Obtenez des AVAX testnet depuis le [Avalanche Fuji Faucet](https://faucet.avax.network/)
-2. Déployez le smart contract (voir `fastify-backend/contracts/`)
-3. Ajoutez l'adresse du contrat dans `.env`
+Get test AVAX from the [Avalanche Faucet](https://faucet.avax.network/).
 
-## 🎮 Commandes Makefile
+## API Reference
 
-```bash
-# Setup et déploiement
-make help        # Afficher toutes les commandes
-make setup       # Setup initial (SSL + .env + frontend)
-make frontend    # Build le frontend uniquement
-make build       # Build les conteneurs Docker
-make up          # Démarrer tous les services
-make down        # Arrêter tous les services
+### Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/users/register/` | Create account |
+| POST | `/api/users/login/` | Login |
+| POST | `/api/users/logout/` | Logout |
+| GET | `/api/auth/oauth/42/` | 42 OAuth flow |
+| GET | `/api/auth/oauth/github/` | GitHub OAuth flow |
 
-# Développement
-make logs        # Voir les logs en temps réel
-make clean       # Arrêter et supprimer les conteneurs
-make fclean      # Nettoyage complet
-make re          # Rebuild complet (fclean + setup + build + up)
-```
-
-## 🎯 API Endpoints
-
-### Authentification
-- `POST /api/users/register/` - Inscription
-- `POST /api/users/login/` - Connexion
-- `POST /api/users/logout/` - Déconnexion
-- `GET /api/auth/oauth/42/` - OAuth 42 (redirection)
-- `GET /api/auth/oauth/github/` - OAuth GitHub (redirection)
-
-### Utilisateurs
-- `GET /api/users/me/` - Utilisateur courant
-- `GET /api/users/profile/` - Profil
-- `PUT /api/users/profile/` - Mise à jour profil
-- `GET /api/users/stats/` - Statistiques
-- `GET /api/users/friends/` - Liste d'amis
-- `POST /api/users/friends/:id/add/` - Ajouter un ami
-- `DELETE /api/users/friends/:id/remove/` - Retirer un ami
-- `GET /api/users/blocked/` - Utilisateurs bloqués
-- `POST /api/users/block/:id/` - Bloquer
-- `DELETE /api/users/unblock/:id/` - Débloquer
+### Users
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users/me/` | Current user |
+| GET | `/api/users/profile/` | User profile |
+| PUT | `/api/users/profile/` | Update profile |
+| GET | `/api/users/stats/` | User statistics |
+| GET | `/api/users/friends/` | Friends list |
+| POST | `/api/users/friends/:id/add/` | Add friend |
+| DELETE | `/api/users/friends/:id/remove/` | Remove friend |
+| POST | `/api/users/block/:id/` | Block user |
+| DELETE | `/api/users/unblock/:id/` | Unblock user |
 
 ### Pong
-- `POST /api/pong/matches/create/` - Créer un match
-- `POST /api/pong/matches/:id/result/` - Enregistrer résultat
-- `GET /api/pong/matches/history/` - Historique
-- `POST /api/pong/rooms/create/` - Créer une room
-- `POST /api/pong/matchmaking/join/` - Rejoindre matchmaking
-- `GET /api/pong/matchmaking/status/` - Statut matchmaking
-- `POST /api/pong/matchmaking/leave/` - Quitter matchmaking
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/pong/matches/create/` | Create match |
+| POST | `/api/pong/matches/:id/result/` | Record result |
+| GET | `/api/pong/matches/history/` | Match history |
+| POST | `/api/pong/rooms/create/` | Create private room |
+| POST | `/api/pong/matchmaking/join/` | Join queue |
+| POST | `/api/pong/matchmaking/leave/` | Leave queue |
 
 ### Chat
-- `GET /api/chat/conversations/` - Conversations
-- `GET /api/chat/messages/?user=:id` - Messages avec un user
-- `POST /api/chat/messages/send/` - Envoyer un message
-- `GET /api/chat/notifications/` - Notifications
-- `POST /api/chat/notifications/:id/read/` - Marquer comme lu
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/chat/conversations/` | List conversations |
+| GET | `/api/chat/messages/?user=:id` | Get messages |
+| POST | `/api/chat/messages/send/` | Send message |
+| GET | `/api/chat/notifications/` | Get notifications |
 
-### Blockchain
-- `POST /api/blockchain/tournament/record/` - Enregistrer score
-- `GET /api/blockchain/tournament/:id/` - Récupérer score
-- `GET /api/blockchain/history/` - Historique blockchain
+### WebSocket Endpoints
+| Endpoint | Description |
+|----------|-------------|
+| `WS /ws/pong/:room` | Real-time Pong game |
+| `WS /ws/chat/` | Global chat room |
 
-### WebSockets
-- `WS /ws/pong/:room` - WebSocket Pong remote
-- `WS /ws/chat/` - WebSocket chat global
+## AI Algorithm
 
-## 🤖 Algorithme IA (Pong)
+The AI opponent uses **trajectory prediction** to determine paddle movement:
 
-L'IA utilise une approche de **prédiction de trajectoire** :
+1. **Refresh Rate**: Updates game state once per second (as required by subject)
+2. **Prediction**: Calculates ball trajectory including wall bounces
+3. **Movement**: Simulates keyboard input to move toward predicted position
+4. **Difficulty Levels**:
+   - **Easy**: 120px error margin, 50% paddle speed
+   - **Medium**: 40px error margin, 75% paddle speed
+   - **Hard**: Perfect prediction, 150% paddle speed
 
-1. **Limitation:** Rafraîchit sa vue du jeu 1x par seconde (contrainte du sujet)
-2. **Prédiction:** Calcule où la balle va arriver en simulant les rebonds
-3. **Mouvement:** Se déplace vers la position prédite avec contrôle clavier simulé
-4. **Difficulté:** 3 niveaux (Easy, Medium, Hard)
+The implementation does not use pathfinding algorithms (A* is prohibited by the subject).
 
-**Pas d'algorithme A*** (interdit par le sujet)
+## Security
 
-## 🔗 Blockchain
+- Password hashing with bcrypt (12 rounds)
+- JWT authentication with access/refresh tokens
+- Input validation on frontend and backend
+- SQL injection protection via prepared statements
+- XSS protection with HTML sanitization
+- HTTPS/WSS encryption
+- Rate limiting (100 req/min global, 5 req/min for auth)
+- OAuth state parameter for CSRF protection
 
-### Configuration Avalanche Fuji
-- **Réseau:** Avalanche Fuji testnet (C-Chain)
-- **RPC URL:** `https://api.avax-test.network/ext/bc/C/rpc`
-- **Chain ID:** 43113
-- **Smart Contract:** TournamentScore.sol (Solidity 0.8.0)
-- **Explorer:** [https://testnet.snowtrace.io/](https://testnet.snowtrace.io/)
+## Troubleshooting
 
-### Utilisation
+### Services not starting
 ```bash
-# Enregistrer un score de tournoi sur la blockchain
-curl -X POST https://localhost:8443/api/blockchain/tournament/record/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "tournament_id": 1,
-    "winner_username": "player1",
-    "winner_score": 15
-  }'
+docker-compose logs          # Check all logs
+docker-compose logs api      # Check backend logs
+make re                      # Full rebuild
 ```
 
-## 🐛 Troubleshooting
-
-### Le site ne démarre pas
+### WebSocket connection issues
 ```bash
-# Vérifier les logs
-docker-compose logs
-
-# Rebuild complet
-make re
+docker-compose ps            # Verify services are running
+docker-compose logs nginx    # Check proxy configuration
 ```
 
-### WebSocket ne se connecte pas
+### Database issues
 ```bash
-# Vérifier les services
-docker-compose ps
-
-# Vérifier les logs Fastify
-docker-compose logs api
+docker-compose exec api ls -la /app/data/  # Check database file
+make clean && make                          # Reset everything
 ```
 
-### Erreur 403 Forbidden
-```bash
-# Rebuild le frontend
-make frontend
-docker-compose restart nginx
-```
+## Documentation
 
-### Blockchain - Erreur Web3
-```bash
-# Vérifier la configuration
-docker-compose logs api | grep -i blockchain
+- [Project Status Report](docs/RECAP_PROJET.md)
+- [Security Audit](TODO/SECURITY_AUDIT.md)
+- [Subject Requirements](docs/en.subject.txt)
 
-# Vérifier les variables d'environnement
-docker-compose exec api env | grep WEB3
-```
+## License
 
-## 📚 Documentation
-
-- **Backend:** `fastify-backend/README.md`
-- **Migration Django→Fastify:** `MIGRATION_FASTIFY.md`
-- **Sujet:** `docs/en.subject.txt`
-
-## 🎓 Modules Validés
-
-✅ **7 modules majeurs** (70 points) :
-- Backend Framework (Fastify)
-- Standard User Management
-- Remote Players (WebSocket)
-- Live Chat (WebSocket)
-- AI Opponent
-- Additional Game (RPS)
-- Blockchain (Avalanche)
-
-✅ **3 modules mineurs** (15 points) :
-- SQLite Database
-- TypeScript Frontend
-- Remote Authentication (OAuth 2.0)
-
-**Total: 85 points / 100 possible**
-
-## 📄 Licence
-
-Ce projet est réalisé dans le cadre du cursus de l'école 42.
+This project was developed as part of the 42 school curriculum.
 
 ---
 
-## 🚀 Quick Start
-
-```bash
-git clone <repo_url>
-cd transcendence
-make up
-
-# Créer un compte via l'interface web
-# ou via OAuth 42/GitHub
-# https://localhost:8443
-```
+**Score: 95-100/100** (6 major modules + 2 minor modules)
