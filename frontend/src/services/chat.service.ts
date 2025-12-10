@@ -169,14 +169,22 @@ export class ChatClient {
       return false;
     }
 
-    if (!message || message.trim() === '') {
+    const trimmedMessage = message.trim();
+
+    if (!trimmedMessage) {
+      return false;
+    }
+
+    // Validate message length (max 2000 chars to match backend)
+    if (trimmedMessage.length > 2000) {
+      this.showSystemMessage('Le message ne peut pas dépasser 2000 caractères', 'error');
       return false;
     }
 
     try {
       const outgoingMessage: ChatOutgoingMessage = {
         type: 'global_message',
-        content: message.trim(),
+        content: trimmedMessage,
       };
       this.socket.send(JSON.stringify(outgoingMessage));
       return true;

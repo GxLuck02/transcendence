@@ -19,6 +19,15 @@ import { RemotePongGame } from './games/pong-remote';
 import { tournamentManager } from './services/tournament.service';
 import type { User } from './types';
 import { renderStatsDashboard } from './statistique/stats'; // ou ./stat.ts selon ton bundler
+import {
+  validateLoginForm,
+  validateRegistrationForm,
+  validateChatMessage,
+  validateTournamentAlias,
+  validateRoomCode,
+  showValidationError,
+  clearValidationError,
+} from './utils/validation';
 
 type LocalParticipant = {
   id: number;
@@ -359,18 +368,23 @@ class Router {
     form?.addEventListener('submit', async (e: Event) => {
       e.preventDefault();
       const formData = new FormData(form);
-      const username = formData.get('username') as string;
-      const password = formData.get('password') as string;
+      const username = (formData.get('username') as string) || '';
+      const password = (formData.get('password') as string) || '';
       const errorDiv = document.getElementById('error-message');
 
+      // Client-side validation
+      clearValidationError(errorDiv);
+      const validation = validateLoginForm({ username, password });
+      if (!validation.valid) {
+        showValidationError(errorDiv, validation.error || 'Erreur de validation');
+        return;
+      }
+
       try {
-        await authService.login(username, password);
+        await authService.login(username.trim(), password);
         this.navigateTo('/');
       } catch (error) {
-        if (errorDiv) {
-          errorDiv.textContent = (error as Error).message;
-          errorDiv.style.display = 'block';
-        }
+        showValidationError(errorDiv, (error as Error).message);
       }
     });
   }
@@ -418,21 +432,38 @@ class Router {
     form?.addEventListener('submit', async (e: Event) => {
       e.preventDefault();
       const formData = new FormData(form);
-      const username = formData.get('username') as string;
-      const email = formData.get('email') as string;
-      const displayName = formData.get('display_name') as string;
-      const password = formData.get('password') as string;
-      const passwordConfirm = formData.get('password_confirm') as string;
+      const username = (formData.get('username') as string) || '';
+      const email = (formData.get('email') as string) || '';
+      const displayName = (formData.get('display_name') as string) || '';
+      const password = (formData.get('password') as string) || '';
+      const passwordConfirm = (formData.get('password_confirm') as string) || '';
       const errorDiv = document.getElementById('error-message');
 
+      // Client-side validation
+      clearValidationError(errorDiv);
+      const validation = validateRegistrationForm({
+        username,
+        email,
+        displayName,
+        password,
+        passwordConfirm,
+      });
+      if (!validation.valid) {
+        showValidationError(errorDiv, validation.error || 'Erreur de validation');
+        return;
+      }
+
       try {
-        await authService.register(username, email, displayName, password, passwordConfirm);
+        await authService.register(
+          username.trim(),
+          email.trim(),
+          displayName.trim(),
+          password,
+          passwordConfirm
+        );
         this.navigateTo('/');
       } catch (error) {
-        if (errorDiv) {
-          errorDiv.textContent = (error as Error).message;
-          errorDiv.style.display = 'block';
-        }
+        showValidationError(errorDiv, (error as Error).message);
       }
     });
   }
@@ -806,12 +837,14 @@ class Router {
   }
 
   private launchRemoteGame(roomCode: string): void {
-    const normalized = roomCode.trim();
-    if (!normalized) {
-      this.renderQueueState('error', 'Code de salle invalide.');
+    // Client-side validation of room code
+    const validation = validateRoomCode(roomCode);
+    if (!validation.valid) {
+      this.renderQueueState('error', validation.error || 'Code de salle invalide.');
       return;
     }
 
+    const normalized = roomCode.trim().toUpperCase();
     const section = document.getElementById('remote-game-section');
     const infoBox = document.getElementById('remote-game-info');
     const canvas = document.getElementById('remotePongCanvas') as HTMLCanvasElement | null;
@@ -1071,7 +1104,13 @@ class Router {
       event.preventDefault();
       if (!this.activeConversationUserId || !directInput) return;
       const message = directInput.value.trim();
-      if (!message) return;
+
+      // Client-side validation
+      const validation = validateChatMessage(message);
+      if (!validation.valid) {
+        alert(validation.error || 'Message invalide');
+        return;
+      }
 
       try {
         await sendDirectMessage({
@@ -1537,16 +1576,19 @@ class Router {
       event.preventDefault();
       if (!aliasInput) return;
 
-      const alias = aliasInput.value.trim();
-      if (!alias) {
-        this.displayTournamentMessage('Veuillez saisir un alias.', 'error');
+      const alias = aliasInput.value;
+
+      // Client-side validation
+      const validation = validateTournamentAlias(alias);
+      if (!validation.valid) {
+        this.displayTournamentMessage(validation.error || 'Alias invalide', 'error');
         return;
       }
 
       try {
-        tournamentManager.registerPlayer(alias);
+        tournamentManager.registerPlayer(alias.trim());
         aliasInput.value = '';
-        this.displayTournamentMessage(`${alias} rejoint la compétition.`, 'success');
+        this.displayTournamentMessage(`${alias.trim()} rejoint la compétition.`, 'success');
         this.updateTournamentUI();
       } catch (error) {
         this.displayTournamentMessage((error as Error).message, 'error');
