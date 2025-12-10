@@ -5,46 +5,37 @@ This module implements blockchain integration for storing tournament scores on A
 ## Features
 
 - **TournamentScore Smart Contract**: Solidity smart contract for immutable tournament score storage
-- **Web3 Integration**: Python service using web3.py for blockchain interaction
-- **RESTful API**: Django REST Framework endpoints for blockchain operations
+- **Web3 Integration**: Node.js service using web3.js for blockchain interaction
+- **RESTful API**: Fastify endpoints for blockchain operations
 - **Avalanche Support**: Integration with Avalanche Fuji testnet (C-Chain)
 
 ## Architecture
 
 ### Smart Contract (`contracts/TournamentScore.sol`)
-- Stores tournament data (ID, name, winner, timestamp)
+- Stores tournament data (ID, name, winner, winner score, timestamp)
 - Emits events for tournament storage
 - Read-only functions to retrieve stored tournaments
 
-### Web3 Service (`services/web3_service.py`)
-- Singleton service for blockchain interactions
-- Contract compilation using py-solc-x
-- Contract deployment and interaction
+### Web3 Integration (`src/routes/blockchain.js`)
+- Web3.js for blockchain interactions
+- Contract initialization and interaction
 - Transaction management
+- Automatic BigInt serialization handling
 
-### API Endpoints (`views.py`)
+### API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/blockchain/status/` | GET | Check blockchain connection status |
-| `/api/blockchain/transactions/` | GET | List all blockchain transactions |
-| `/api/blockchain/transactions/<tx_hash>/` | GET | Get transaction details |
-| `/api/blockchain/contracts/` | GET | List deployed smart contracts |
-| `/api/blockchain/contracts/<address>/` | GET | Get contract details |
-| `/api/blockchain/tournaments/<id>/store/` | POST | Store tournament on blockchain |
-| `/api/blockchain/tournaments/<id>/blockchain/` | GET | Get tournament from blockchain |
+| `/api/blockchain/tournament/record/` | POST | Store tournament winner on blockchain |
+| `/api/blockchain/tournament/:id/` | GET | Get tournament winner from blockchain |
+| `/api/blockchain/history/` | GET | Get blockchain transaction history from database |
 
-### Database Models
+### Database
 
-#### `BlockchainTransaction`
+#### `blockchain_scores` table (SQLite)
 - Stores blockchain transaction records
-- Links to tournaments
-- Tracks transaction status and gas usage
-
-#### `SmartContract`
-- Stores deployed contract information
-- Contract ABI and bytecode
-- Deployment metadata
+- Links tournament data with blockchain transactions
+- Tracks transaction hash and block number
 
 ## Setup
 
@@ -54,13 +45,15 @@ Edit your `.env` file with Avalanche Fuji testnet configuration:
 
 ```bash
 WEB3_PROVIDER_URI=https://api.avax-test.network/ext/bc/C/rpc
-BLOCKCHAIN_PRIVATE_KEY=your-private-key-here
+BLOCKCHAIN_PRIVATE_KEY=your_private_key_without_0x
+CONTRACT_ADDRESS=0xYourDeployedContractAddress
 ```
 
 **Important**:
 - Get AVAX testnet tokens from the [Avalanche Fuji Faucet](https://faucet.avax.network/)
 - Never commit your private key to version control
-- The private key should be without the `0x` prefix
+- The private key should be without the `0x` prefix (it will be added automatically)
+- The contract address is the deployed TournamentScore contract address
 
 **Network Details**:
 - Network Name: Avalanche Fuji C-Chain
@@ -69,120 +62,134 @@ BLOCKCHAIN_PRIVATE_KEY=your-private-key-here
 - Currency Symbol: AVAX
 - Block Explorer: https://testnet.snowtrace.io/
 
-### 2. Run Migrations
+### 2. Deploy Smart Contract (One-time setup)
 
-```bash
-docker compose exec web python manage.py migrate blockchain
-```
+The contract should already be deployed. If you need to deploy a new version:
 
-### 3. Deploy Smart Contract
-
-```bash
-docker compose exec web python manage.py deploy_tournament_contract
-```
-
-This will:
-1. Connect to Avalanche Fuji testnet
-2. Compile the TournamentScore smart contract
-3. Deploy it to the blockchain (requires AVAX for gas fees)
-4. Save contract details to database
-5. Run test functions
-
-**Note**: Ensure you have sufficient AVAX in your account for deployment gas fees.
+1. Ensure `solc` is installed:
+   - Mac: `brew install solidity`
+   - Linux: `apt-get install solc` or `yum install solidity`
+2. Configure `BLOCKCHAIN_PRIVATE_KEY` in `.env`
+3. Deploy the contract (manual process, see deployment documentation)
+4. Add `CONTRACT_ADDRESS` to `.env`
 
 ## Usage
 
-### Check Blockchain Status
-
-```bash
-curl http://localhost:8000/api/blockchain/status/
-```
-
 ### Store Tournament on Blockchain
 
+The tournament winner is automatically recorded on the blockchain when a tournament is completed. The frontend calls the API automatically.
+
+**Manual API call**:
 ```bash
-curl -X POST http://localhost:8000/api/blockchain/tournaments/1/store/ \
+curl -X POST https://localhost:8443/api/blockchain/tournament/record/ \
   -H "Authorization: Bearer <your_jwt_token>" \
-  -H "Content-Type: application/json"
+  -H "Content-Type: application/json" \
+  -d '{
+    "tournament_id": 1234567890,
+    "tournament_name": "Tournament #1234567890",
+    "winner_username": "player1",
+    "winner_score": 5
+  }'
 ```
 
-Requirements:
-- Tournament must be completed
-- Tournament must have a winner
-- User must be authenticated
+**Response**:
+```json
+{
+  "success": true,
+  "tx_hash": "0x...",
+  "block_number": 12345678,
+  "tournament_id": 1234567890,
+  "winner_username": "player1",
+  "winner_score": 5
+}
+```
 
 ### Retrieve Tournament from Blockchain
 
 ```bash
-curl http://localhost:8000/api/blockchain/tournaments/1/blockchain/
+curl https://localhost:8443/api/blockchain/tournament/1234567890/ \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+
+**Response**:
+```json
+{
+  "tournament_id": 1234567890,
+  "winner_username": "player1",
+  "winner_score": 5
+}
+```
+
+### Get Blockchain History
+
+```bash
+curl https://localhost:8443/api/blockchain/history/ \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+
+**Response**:
+```json
+[
+  {
+    "id": 1,
+    "tournament_id": 1234567890,
+    "winner_username": "player1",
+    "winner_score": 5,
+    "tx_hash": "0x...",
+    "block_number": 12345678,
+    "created_at": "2025-12-10 17:00:00"
+  }
+]
 ```
 
 ## Development
 
-### Contract Compilation
+### Contract Structure
 
-The Web3 service automatically compiles Solidity contracts using `py-solc-x`:
+The `TournamentScore.sol` contract includes:
+- `storeTournament()`: Store tournament data on blockchain
+- `getTournament()`: Retrieve full tournament data
+- `getTournamentWinner()`: Get winner username and score
+- `getTournamentCount()`: Get total number of tournaments
+- `getAllTournamentIds()`: Get all tournament IDs
 
-```python
-from backend.apps.blockchain.services.web3_service import get_web3_service
+### Web3 Integration
 
-web3_service = get_web3_service()
-abi, bytecode = web3_service.compile_contract('path/to/contract.sol')
-```
-
-### Contract Interaction
-
-```python
-# Get contract instance
-contract = web3_service.get_contract(contract_address, contract_abi)
-
-# Call read-only function
-result = web3_service.call_contract_function(contract, 'getTournament', tournament_id)
-
-# Send transaction
-tx_hash, tx_receipt = web3_service.send_contract_transaction(
-    contract,
-    'storeTournament',
-    tournament_id,
-    tournament_name,
-    winner_username
-)
-```
+The blockchain routes automatically:
+- Initialize Web3 connection on server start
+- Handle private key formatting (adds `0x` prefix if needed)
+- Convert BigInt values to Numbers for JSON serialization
+- Store transaction records in SQLite database
 
 ## Security Considerations
 
 - Smart contracts are immutable after deployment
 - All transactions are recorded on the blockchain
 - Gas costs apply for write operations
-- Contract addresses should be verified before use
+- Contract address should be verified before use
 - Use testnet for testing, mainnet for production
-
-## Dependencies
-
-- `web3==6.11.3`: Ethereum blockchain interaction
-- `py-solc-x==2.0.2`: Solidity compiler
-- `solc==0.8.0`: Solidity language version
+- Private keys are stored in `.env` file (never commit to version control)
 
 ## Troubleshooting
 
-### Avalanche Connection Failed
+### Blockchain Service Not Configured
 
-**Symptoms**: "Not connected to blockchain" error
-
-**Solutions**:
-1. Check your internet connection
-2. Verify `WEB3_PROVIDER_URI` is correctly set to `https://api.avax-test.network/ext/bc/C/rpc`
-3. Check if Avalanche Fuji testnet is operational at [Avalanche Status](https://status.avax.network/)
-4. Verify your `.env` file is properly loaded
-
-### Contract Compilation Failed
-
-**Symptoms**: "Contract compilation failed" error
+**Symptoms**: "503 Service Unavailable" or "Blockchain service not configured"
 
 **Solutions**:
-1. Check Solidity file syntax
-2. Ensure py-solc-x is installed
-3. Install solc compiler: `python -m solcx.install v0.8.0`
+1. Verify `BLOCKCHAIN_PRIVATE_KEY` is set in `.env`
+2. Verify `CONTRACT_ADDRESS` is set in `.env`
+3. Check that the private key format is correct (without `0x` prefix)
+4. Restart the server: `docker-compose restart api`
+
+### Invalid Private Key Error
+
+**Symptoms**: "InvalidPrivateKeyError: Invalid Private Key"
+
+**Solutions**:
+1. Ensure the private key doesn't have `0x` prefix in `.env` (it's added automatically)
+2. Verify the private key is 64 hexadecimal characters
+3. Check for any extra spaces or newlines in the `.env` file
 
 ### Transaction Failed
 
@@ -190,10 +197,25 @@ tx_hash, tx_receipt = web3_service.send_contract_transaction(
 
 **Solutions**:
 1. Check contract function requirements
-2. Verify gas limit is sufficient (increased to 3M for Avalanche)
+2. Verify gas limit is sufficient (currently set to 300,000)
 3. Check account has sufficient AVAX balance for gas fees
 4. Review contract error messages
 5. Verify your private key is correctly configured
+6. Check that the contract address is correct
+
+### BigInt Serialization Error
+
+**Symptoms**: "Do not know how to serialize a BigInt"
+
+**Solutions**:
+- This should be automatically handled by the code
+- If you see this error, check that `block_number` is converted to Number before sending response
+
+## Dependencies
+
+- `web3@^4.16.0`: Ethereum blockchain interaction library
+- `better-sqlite3@^11.0.0`: SQLite database for transaction history
+- `solc`: Solidity compiler (for contract compilation, if needed)
 
 ## Future Enhancements
 

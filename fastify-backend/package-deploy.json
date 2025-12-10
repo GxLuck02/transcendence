@@ -1,8 +1,0 @@
-{
-  "type": "module",
-  "name": "deploy-contract",
-  "version": "1.0.0",
-  "dependencies": {
-    "web3": "^4.8.0"
-  }
-}
