@@ -59,9 +59,14 @@ function initializeWeb3() {
 
   try {
     web3 = new Web3(WEB3_PROVIDER_URI);
-    account = web3.eth.accounts.privateKeyToAccount(BLOCKCHAIN_PRIVATE_KEY);
+    // Ajouter le préfixe 0x si nécessaire
+    const privateKey = BLOCKCHAIN_PRIVATE_KEY.startsWith('0x') 
+      ? BLOCKCHAIN_PRIVATE_KEY 
+      : '0x' + BLOCKCHAIN_PRIVATE_KEY;
+    account = web3.eth.accounts.privateKeyToAccount(privateKey);
     web3.eth.accounts.wallet.add(account);
     contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+    console.log('✅ Web3 initialisé avec succès');
     return true;
   } catch (error) {
     console.error('Failed to initialize Web3:', error);
@@ -112,17 +117,22 @@ export default async function blockchainRoutes(app) {
         gas: 300000
       });
 
+      // Convertir BigInt en Number pour la sérialisation JSON
+      const blockNumber = typeof tx.blockNumber === 'bigint' 
+        ? Number(tx.blockNumber) 
+        : tx.blockNumber;
+
       // Store in database
       const stmt = db.prepare(`
         INSERT INTO blockchain_scores (tournament_id, winner_username, winner_score, tx_hash, block_number)
         VALUES (?, ?, ?, ?, ?)
       `);
-      stmt.run(tournament_id, winner_username, winner_score, tx.transactionHash, tx.blockNumber);
+      stmt.run(tournament_id, winner_username, winner_score, tx.transactionHash, blockNumber);
 
       reply.send({
         success: true,
         tx_hash: tx.transactionHash,
-        block_number: tx.blockNumber,
+        block_number: blockNumber,
         tournament_id,
         winner_username,
         winner_score

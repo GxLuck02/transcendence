@@ -11,13 +11,161 @@
  *   - Optionnel: CONTRACT_BYTECODE dans .env (sinon compilé automatiquement)
  */
 
-import { Web3 } from 'web3';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
+import { readFileSync, existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Dossier pour les dépendances de déploiement
+const DEPLOY_DIR = join(__dirname, '.deploy');
+const WEB3_PATH = join(DEPLOY_DIR, 'node_modules', 'web3');
+
+/**
+ * Charge web3 depuis .deploy/node_modules ou depuis node_modules local
+ * Installe web3 automatiquement si nécessaire
+ */
+async function loadWeb3() {
+  // Essayer depuis .deploy/node_modules d'abord
+  if (existsSync(join(WEB3_PATH, 'package.json'))) {
+    // Utiliser le chemin du module ESM de web3
+    const web3ModulePath = resolve(join(WEB3_PATH, 'lib', 'esm', 'index.js'));
+    const web3Module = await import(`file://${web3ModulePath}`);
+    return web3Module.Web3;
+  }
+
+  // Essayer depuis node_modules local
+  try {
+    const web3Module = await import('web3');
+    return web3Module.Web3;
+  } catch (e) {
+    // web3 non trouvé, installation automatique
+    console.log('📦 Installation automatique de web3...');
+    try {
+      // Créer le dossier .deploy
+      execSync(`mkdir -p "${DEPLOY_DIR}"`, { stdio: 'inherit' });
+      
+      // Créer un package.json minimal
+      const packageJson = {
+        type: 'module',
+        dependencies: { web3: '^4.8.0' }
+      };
+      const packageJsonPath = join(DEPLOY_DIR, 'package.json');
+      const packageJsonContent = JSON.stringify(packageJson, null, 2);
+      execSync(`cat > "${packageJsonPath}" << 'PKGJSON'
+${packageJsonContent}
+PKGJSON
+`, { shell: true });
+      
+      // Installer web3
+      console.log('   Installation en cours...');
+      execSync(`cd "${DEPLOY_DIR}" && npm install --silent`, { stdio: 'inherit' });
+      console.log('✅ web3 installé');
+      
+      // Recharger web3 depuis .deploy/node_modules
+      const web3ModulePath = resolve(join(WEB3_PATH, 'lib', 'esm', 'index.js'));
+      const web3Module = await import(`file://${web3ModulePath}`);
+      return web3Module.Web3;
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'installation de web3:', error.message);
+      console.log('');
+      console.log('📝 Installation manuelle:');
+      console.log(`   cd "${DEPLOY_DIR}"`);
+      console.log('   npm init -y && npm install web3@^4.8.0');
+      console.log('');
+      process.exit(1);
+    }
+  }
+}
+
+// Charger Web3 de manière asynchrone (top-level await supporté dans Node.js 14.8+)
+const Web3 = await loadWeb3();
+
+/**
+ * Trouve le répertoire racine du projet en cherchant le fichier .env
+ * @returns {string} Chemin vers la racine du projet
+ */
+function findProjectRoot() {
+  let currentDir = process.cwd();
+  const maxDepth = 10; // Limite de profondeur pour éviter les boucles infinies
+  let depth = 0;
+
+  while (depth < maxDepth) {
+    const envPath = join(currentDir, '.env');
+    if (existsSync(envPath)) {
+      return currentDir;
+    }
+
+    const parentDir = resolve(currentDir, '..');
+    if (parentDir === currentDir) {
+      // On est à la racine du système de fichiers
+      break;
+    }
+    currentDir = parentDir;
+    depth++;
+  }
+
+  // Si on ne trouve pas, on essaie depuis le répertoire du script
+  const scriptRoot = resolve(__dirname, '..');
+  const envPath = join(scriptRoot, '.env');
+  if (existsSync(envPath)) {
+    return scriptRoot;
+  }
+
+  // Dernier recours : utiliser le répertoire courant
+  return process.cwd();
+}
+
+/**
+ * Charge les variables d'environnement depuis le fichier .env
+ * @param {string} envPath - Chemin vers le fichier .env
+ */
+function loadEnvFile(envPath) {
+  if (!existsSync(envPath)) {
+    console.warn(`⚠️  Fichier .env non trouvé à: ${envPath}`);
+    return;
+  }
+
+  try {
+    const envContent = readFileSync(envPath, 'utf-8');
+    const lines = envContent.split('\n');
+
+    for (const line of lines) {
+      // Ignorer les lignes vides et les commentaires
+      const trimmedLine = line.trim();
+      if (!trimmedLine || trimmedLine.startsWith('#')) {
+        continue;
+      }
+
+      // Parser les lignes KEY=VALUE
+      const match = trimmedLine.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        let value = match[2].trim();
+
+        // Supprimer les guillemets s'ils existent
+        if ((value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+
+        // Ne pas écraser les variables d'environnement déjà définies
+        if (!process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`⚠️  Erreur lors du chargement du .env: ${error.message}`);
+  }
+}
+
+// Trouver et charger le .env depuis la racine du projet
+const projectRoot = findProjectRoot();
+const envPath = join(projectRoot, '.env');
+loadEnvFile(envPath);
 
 // Configuration
 const WEB3_PROVIDER_URI = process.env.WEB3_PROVIDER_URI || 'https://api.avax-test.network/ext/bc/C/rpc';

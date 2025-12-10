@@ -1635,7 +1635,7 @@ class Router {
   private updateTournamentUI(): void {
     this.renderParticipantList();
     this.renderTournamentBracket();
-    this.renderTournamentStatus();
+    this.renderTournamentStatus().catch(err => console.error('Erreur renderTournamentStatus:', err));
   }
 
   private renderParticipantList(): void {
@@ -1857,7 +1857,7 @@ class Router {
       maxScore: 5, // Score plus court pour les tournois
       hideGameOverScreen: true, // Désactiver l'écran de fin standard pour le tournoi
       hidePlayerNames: true, // Utiliser le header personnalisé du tournoi
-      onGameOver: (result) => {
+      onGameOver: async (result) => {
         // Supprimer l'overlay standard s'il existe (sécurité)
         const existingOverlay = document.getElementById('game-over-overlay');
         if (existingOverlay) existingOverlay.remove();
@@ -1881,15 +1881,18 @@ class Router {
         const tournamentWinner = tournamentManager.getWinner();
         const isFinal = tournamentWinner !== null;
 
-        // Si c'est la finale, enregistrer sur la blockchain
-        if (isFinal) {
-          this.recordTournamentOnBlockchain();
-        }
-
         // Nettoyer le jeu
         if (this.currentPongGame) {
           this.currentPongGame.stop();
           this.currentPongGame = null;
+        }
+
+        // Si c'est la finale, enregistrer sur la blockchain avant d'afficher la fenêtre
+        let blockchainResult: { success: boolean; tx_hash?: string; block_number?: number; error?: string } | null = null;
+        if (isFinal) {
+          console.log('🏆 Match final détecté, enregistrement sur la blockchain...');
+          blockchainResult = await this.recordTournamentOnBlockchain();
+          console.log('📊 Résultat blockchain:', blockchainResult);
         }
 
         // Afficher l'écran de résultat stylé
@@ -1900,7 +1903,9 @@ class Router {
           p2Score,
           winnerName,
           loserName,
-          isFinal
+          isFinal,
+          tx_hash: blockchainResult?.tx_hash,
+          block_number: blockchainResult?.block_number
         });
       }
     });
@@ -1924,8 +1929,9 @@ class Router {
 
   /**
    * Enregistre le résultat du tournoi sur la blockchain
+   * @returns Le résultat de l'enregistrement (pour être affiché dans la fenêtre du gagnant)
    */
-  private async recordTournamentOnBlockchain(): Promise<void> {
+  private async recordTournamentOnBlockchain(): Promise<{ success: boolean; tx_hash?: string; block_number?: number; error?: string }> {
     try {
       const result = await tournamentManager.recordTournamentOnBlockchain();
       
@@ -1934,25 +1940,16 @@ class Router {
           tx_hash: result.tx_hash,
           block_number: result.block_number,
         });
-        // Optionnel: afficher une notification à l'utilisateur
-        this.displayTournamentMessage(
-          `🏆 Résultat enregistré sur la blockchain! Transaction: ${result.tx_hash?.substring(0, 10)}...`,
-          'success'
-        );
       } else {
         console.error('❌ Erreur lors de l\'enregistrement sur la blockchain:', result.error);
-        // Afficher un message d'erreur non bloquant
-        this.displayTournamentMessage(
-          `⚠️ Impossible d'enregistrer sur la blockchain: ${result.error}`,
-          'error'
-        );
       }
+      return result;
     } catch (error) {
       console.error('❌ Erreur lors de l\'enregistrement sur la blockchain:', error);
-      this.displayTournamentMessage(
-        '⚠️ Erreur lors de l\'enregistrement sur la blockchain',
-        'error'
-      );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
+      };
     }
   }
 
@@ -1964,8 +1961,10 @@ class Router {
     winnerName: string;
     loserName: string;
     isFinal: boolean;
+    tx_hash?: string;
+    block_number?: number;
   }): void {
-    const { player1Name, player2Name, p1Score, p2Score, winnerName, isFinal } = data;
+    const { player1Name, player2Name, p1Score, p2Score, winnerName, isFinal, tx_hash, block_number } = data;
 
     // Créer l'overlay
     const overlay = document.createElement('div');
@@ -2142,6 +2141,51 @@ class Router {
           text-transform: uppercase;
           letter-spacing: 2px;
         }
+        .blockchain-info {
+          background: rgba(0, 212, 255, 0.1);
+          border: 1px solid rgba(0, 212, 255, 0.3);
+          border-radius: 10px;
+          padding: 15px;
+          margin: 20px 0;
+          text-align: left;
+        }
+        .blockchain-label {
+          color: #00d4ff;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          margin-bottom: 8px;
+        }
+        .tx-hash {
+          font-family: monospace;
+          font-size: 14px;
+          color: #fff;
+          background: rgba(0, 0, 0, 0.3);
+          padding: 10px;
+          border-radius: 5px;
+          word-break: break-all;
+          cursor: text;
+          user-select: all;
+          margin: 5px 0;
+        }
+        .tx-hash:hover {
+          background: rgba(0, 212, 255, 0.2);
+        }
+        .block-number {
+          color: #aaa;
+          font-size: 12px;
+          margin-top: 5px;
+        }
+        .blockchain-link {
+          color: #00d4ff;
+          text-decoration: none;
+          font-size: 12px;
+          margin-top: 8px;
+          display: inline-block;
+        }
+        .blockchain-link:hover {
+          text-decoration: underline;
+        }
       </style>
       <div class="result-card">
         ${isFinal ? '<div class="final-badge">Champion du Tournoi</div>' : ''}
@@ -2165,6 +2209,24 @@ class Router {
           </div>
         </div>
 
+        ${isFinal ? `
+          <div class="blockchain-info">
+            ${tx_hash ? `
+              <div class="blockchain-label">🔗 Transaction Blockchain</div>
+              <div class="tx-hash" id="tx-hash-display">${tx_hash}</div>
+              ${block_number ? `<div class="block-number">Block: ${block_number}</div>` : ''}
+              <a href="https://testnet.snowtrace.io/tx/${tx_hash}" target="_blank" class="blockchain-link">
+                Voir sur l'explorateur Snowtrace →
+              </a>
+            ` : `
+              <div class="blockchain-label" style="color: #ff9800;">⚠️ Enregistrement Blockchain</div>
+              <div style="color: #aaa; font-size: 12px; margin-top: 5px;">
+                L'enregistrement sur la blockchain n'a pas pu être effectué. Vérifiez la configuration du backend.
+              </div>
+            `}
+          </div>
+        ` : ''}
+
         <div class="action-buttons">
           <button id="back-to-bracket" class="btn-tournament">${isFinal ? 'Voir le classement' : 'Retour au bracket'}</button>
           ${isFinal ? '<button id="new-tournament" class="btn-tournament secondary">Nouveau tournoi</button>' : ''}
@@ -2187,7 +2249,7 @@ class Router {
     });
   }
 
-  private renderTournamentStatus(): void {
+  private async renderTournamentStatus(): Promise<void> {
     const nextMatchBox = document.getElementById('tournament-next-match');
     const winnerBox = document.getElementById('tournament-winner');
 
@@ -2197,7 +2259,52 @@ class Router {
     if (winner) {
       nextMatchBox.textContent = 'Tous les matchs sont terminés.';
       winnerBox.style.display = 'block';
-      winnerBox.textContent = `🏆 Champion : ${winner.alias}`;
+      
+      // Récupérer le hash de transaction depuis l'historique blockchain
+      let txHash: string | null = null;
+      let blockNumber: number | null = null;
+      try {
+        const token = localStorage.getItem('access_token');
+        if (token) {
+          const response = await fetch('https://localhost:8443/api/blockchain/history/', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          if (response.ok) {
+            const history = await response.json();
+            // Trouver la transaction la plus récente pour ce gagnant
+            const latestTx = history.find((tx: any) => tx.winner_username === winner.alias);
+            if (latestTx) {
+              txHash = latestTx.tx_hash;
+              blockNumber = latestTx.block_number;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération de l\'historique blockchain:', error);
+      }
+      
+      // Afficher le champion avec le hash si disponible
+      if (txHash) {
+        winnerBox.innerHTML = `
+          <div style="margin-bottom: 10px;">
+            <strong style="color: #4caf50;">🏆 Champion : ${winner.alias}</strong>
+          </div>
+          <div style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 8px; padding: 10px; margin-top: 10px; font-size: 12px;">
+            <div style="color: #00d4ff; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">🔗 Transaction Blockchain</div>
+            <div style="font-family: monospace; font-size: 11px; color: #fff; background: rgba(0, 0, 0, 0.3); padding: 8px; border-radius: 4px; word-break: break-all; user-select: all; cursor: text; margin: 5px 0;">
+              ${txHash}
+            </div>
+            ${blockNumber ? `<div style="color: #aaa; font-size: 11px; margin-top: 5px;">Block: ${blockNumber}</div>` : ''}
+            <a href="https://testnet.snowtrace.io/tx/${txHash}" target="_blank" style="color: #00d4ff; text-decoration: none; font-size: 11px; margin-top: 5px; display: inline-block;">
+              Voir sur Snowtrace →
+            </a>
+          </div>
+        `;
+      } else {
+        winnerBox.textContent = `🏆 Champion : ${winner.alias}`;
+      }
       return;
     }
 

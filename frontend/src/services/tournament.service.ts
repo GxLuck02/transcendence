@@ -3,6 +3,8 @@
  * Handles tournament creation, registration, and matchmaking
  */
 
+import { authService } from './auth.service';
+
 interface Participant {
   id: number;
   alias: string;
@@ -269,7 +271,8 @@ export class TournamentManager {
     // Trouver le match final (le dernier match où le gagnant a gagné)
     // C'est le match du dernier round où le gagnant est le winner
     const finalRound = Math.max(...this.matches.map(m => m.round));
-    const finalMatches = this.matches.filter(m => m.round === finalRound && m.winner?.id === this.winner.id);
+    const winnerId = this.winner.id; // TypeScript sait maintenant que this.winner n'est pas null
+    const finalMatches = this.matches.filter(m => m.round === finalRound && m.winner?.id === winnerId);
     
     // Retourner le premier match final trouvé (il ne devrait y en avoir qu'un)
     return finalMatches.length > 0 ? finalMatches[0] : null;
@@ -303,12 +306,19 @@ export class TournamentManager {
     const tournId = tournamentId || Math.floor(Date.now() / 1000);
     const tournName = tournamentName || `Tournament #${tournId}`;
 
+    const token = this.getAuthToken();
+    if (!token) {
+      console.error('❌ Aucun token d\'authentification disponible pour l\'enregistrement blockchain');
+      return { success: false, error: 'Authentification requise. Veuillez vous reconnecter.' };
+    }
+
     try {
+      console.log('📤 Envoi de la requête blockchain avec token:', token.substring(0, 20) + '...');
       const response = await fetch('https://localhost:8443/api/blockchain/tournament/record/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.getAuthToken()}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           tournament_id: tournId,
@@ -320,17 +330,19 @@ export class TournamentManager {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
+        console.error('❌ Erreur API blockchain:', response.status, errorData);
         return { success: false, error: errorData.error || `Erreur HTTP ${response.status}` };
       }
 
       const result = await response.json();
+      console.log('✅ Réponse API blockchain:', result);
       return {
         success: true,
         tx_hash: result.tx_hash,
         block_number: result.block_number,
       };
     } catch (error) {
-      console.error('Erreur lors de l\'enregistrement sur la blockchain:', error);
+      console.error('❌ Erreur lors de l\'enregistrement sur la blockchain:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -359,7 +371,12 @@ export class TournamentManager {
   }
 
   private getAuthToken(): string {
-    return localStorage.getItem('access_token') || '';
+    const token = authService.getAccessToken();
+    if (!token) {
+      console.warn('⚠️ Aucun token d\'authentification disponible');
+      return '';
+    }
+    return token;
   }
 }
 

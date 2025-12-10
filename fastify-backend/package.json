@@ -20,7 +20,7 @@
     "better-sqlite3": "^11.0.0",
     "fastify": "^4.28.1",
     "nanoid": "^5.0.7",
-    "web3": "^4.8.0"
+    "web3": "^4.16.0"
   },
   "devDependencies": {
     "node-gyp": "^10.1.0"
