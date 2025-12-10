@@ -1881,6 +1881,11 @@ class Router {
         const tournamentWinner = tournamentManager.getWinner();
         const isFinal = tournamentWinner !== null;
 
+        // Si c'est la finale, enregistrer sur la blockchain
+        if (isFinal) {
+          this.recordTournamentOnBlockchain();
+        }
+
         // Nettoyer le jeu
         if (this.currentPongGame) {
           this.currentPongGame.stop();
@@ -1915,6 +1920,40 @@ class Router {
       }
       this.tournamentPage();
     });
+  }
+
+  /**
+   * Enregistre le résultat du tournoi sur la blockchain
+   */
+  private async recordTournamentOnBlockchain(): Promise<void> {
+    try {
+      const result = await tournamentManager.recordTournamentOnBlockchain();
+      
+      if (result.success) {
+        console.log('✅ Tournoi enregistré sur la blockchain:', {
+          tx_hash: result.tx_hash,
+          block_number: result.block_number,
+        });
+        // Optionnel: afficher une notification à l'utilisateur
+        this.displayTournamentMessage(
+          `🏆 Résultat enregistré sur la blockchain! Transaction: ${result.tx_hash?.substring(0, 10)}...`,
+          'success'
+        );
+      } else {
+        console.error('❌ Erreur lors de l\'enregistrement sur la blockchain:', result.error);
+        // Afficher un message d'erreur non bloquant
+        this.displayTournamentMessage(
+          `⚠️ Impossible d'enregistrer sur la blockchain: ${result.error}`,
+          'error'
+        );
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'enregistrement sur la blockchain:', error);
+      this.displayTournamentMessage(
+        '⚠️ Erreur lors de l\'enregistrement sur la blockchain',
+        'error'
+      );
+    }
   }
 
   private showTournamentMatchResult(data: {

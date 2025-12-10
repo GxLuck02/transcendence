@@ -257,6 +257,87 @@ export class TournamentManager {
     return this.winner;
   }
 
+  /**
+   * Récupère le match final (celui où le gagnant du tournoi a gagné)
+   * @returns Le match final avec les scores, ou null si le tournoi n'est pas terminé
+   */
+  public getFinalMatch(): TournamentMatch | null {
+    if (!this.winner) {
+      return null;
+    }
+
+    // Trouver le match final (le dernier match où le gagnant a gagné)
+    // C'est le match du dernier round où le gagnant est le winner
+    const finalRound = Math.max(...this.matches.map(m => m.round));
+    const finalMatches = this.matches.filter(m => m.round === finalRound && m.winner?.id === this.winner.id);
+    
+    // Retourner le premier match final trouvé (il ne devrait y en avoir qu'un)
+    return finalMatches.length > 0 ? finalMatches[0] : null;
+  }
+
+  /**
+   * Enregistre le résultat du tournoi sur la blockchain
+   * @param tournamentId ID du tournoi (optionnel, généré automatiquement si non fourni)
+   * @param tournamentName Nom du tournoi (optionnel)
+   * @returns Promise avec le résultat de l'enregistrement
+   */
+  public async recordTournamentOnBlockchain(
+    tournamentId?: number,
+    tournamentName?: string
+  ): Promise<{ success: boolean; tx_hash?: string; block_number?: number; error?: string }> {
+    if (!this.winner) {
+      return { success: false, error: 'Tournoi non terminé' };
+    }
+
+    const finalMatch = this.getFinalMatch();
+    if (!finalMatch || finalMatch.player1Score === undefined || finalMatch.player2Score === undefined) {
+      return { success: false, error: 'Match final non trouvé ou scores manquants' };
+    }
+
+    // Déterminer le score du gagnant
+    const winnerScore = finalMatch.winner?.id === finalMatch.player1.id
+      ? finalMatch.player1Score
+      : finalMatch.player2Score;
+
+    // Générer un ID de tournoi si non fourni (timestamp)
+    const tournId = tournamentId || Math.floor(Date.now() / 1000);
+    const tournName = tournamentName || `Tournament #${tournId}`;
+
+    try {
+      const response = await fetch('https://localhost:8443/api/blockchain/tournament/record/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.getAuthToken()}`,
+        },
+        body: JSON.stringify({
+          tournament_id: tournId,
+          tournament_name: tournName,
+          winner_username: this.winner.alias,
+          winner_score: winnerScore,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
+        return { success: false, error: errorData.error || `Erreur HTTP ${response.status}` };
+      }
+
+      const result = await response.json();
+      return {
+        success: true,
+        tx_hash: result.tx_hash,
+        block_number: result.block_number,
+      };
+    } catch (error) {
+      console.error('Erreur lors de l\'enregistrement sur la blockchain:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
+      };
+    }
+  }
+
   public getParticipants(): Participant[] {
     return this.participants;
   }
