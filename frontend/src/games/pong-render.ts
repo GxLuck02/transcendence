@@ -83,6 +83,15 @@ export class PongGameRenderer {
     this.playerNamesContainer = container;
   }
 
+  public updatePlayerNames(player1Name: string, player2Name: string): void {
+    // Update engine names
+    this.engine.player1Name = player1Name;
+    this.engine.player2Name = player2Name;
+
+    // Recreate the display
+    this.createPlayerNamesDisplay();
+  }
+
   public render(): void {
     // Clear canvas
     this.ctx.fillStyle = '#000';
@@ -152,7 +161,7 @@ export class PongGameRenderer {
     // Semi-transparent overlay
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     this.ctx.fillRect(0, 0, this.engine.width, this.engine.height);
-    
+
     // Text with glow
     this.ctx.font = 'bold 48px monospace';
     this.ctx.fillStyle = '#00d4ff';
@@ -162,7 +171,7 @@ export class PongGameRenderer {
     const textWidth = this.ctx.measureText(text).width;
     this.ctx.fillText(text, (this.engine.width - textWidth) / 2, this.engine.height / 2 - 20);
     this.ctx.shadowBlur = 0;
-    
+
     // Instructions
     this.ctx.font = '20px monospace';
     this.ctx.fillStyle = '#fff';
@@ -174,7 +183,13 @@ export class PongGameRenderer {
   private drawControlsHint(): void {
     this.ctx.font = '14px monospace';
     this.ctx.fillStyle = '#888';
-    this.ctx.fillText('P1: W/S | P2: ↑/↓ | SPACE/ESC: Pause', 10, this.engine.height - 10);
+    if (this.engine.gameMode === '2p_local') {
+      this.ctx.fillText('P1: W/S | P2: ↑/↓ | SPACE/ESC: Start/Pause', 10, this.engine.height - 10);
+    } else if (this.engine.gameMode === 'vs_ai' || this.engine.gameMode === 'online_vs_ai') {
+      this.ctx.fillText('Movement: ↑/↓ | SPACE/ESC: Start/Pause', 10, this.engine.height - 10);
+    } else {
+      this.ctx.fillText('Movement: ↑/↓ ', 10, this.engine.height - 10);
+    }
   }
 
   private drawBallSpeed(): void {
@@ -188,7 +203,7 @@ export class PongGameRenderer {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     const timeString = `${minutes.toString().padStart(1, '0')}:${seconds.toString().padStart(2, '0')}`;
-    
+
     this.ctx.font = '17px monospace';
     this.ctx.fillStyle = '#888';
     const textWidth = this.ctx.measureText(`Time: ${timeString}`).width;
@@ -202,7 +217,7 @@ export class PongGameRenderer {
     }
   }
 
-  public showGameOverScreen(): void {
+  public showGameOverScreen(onRestart?: () => void): void {
     // Créer overlay
     const overlay = document.createElement('div');
     overlay.id = 'game-over-overlay';
@@ -233,7 +248,7 @@ export class PongGameRenderer {
     `;
 
     const winnerName = this.engine.winner === 'player1' ? this.engine.player1Name : this.engine.player2Name;
-    
+
     content.innerHTML = `
       <style>
         @keyframes fadeIn {
@@ -253,7 +268,7 @@ export class PongGameRenderer {
           box-shadow: 0 0 20px #00d4ffff;
         }
       </style>
-      <h1 style="color: #00d4ffff; font-size: 48px; margin: 0 0 20px 0; text-shadow: 0 0 10px #46e0ffe6;">🏆 VICTOIRE!</h1>
+      <h1 style="color: #00d4ffff; font-size: 48px; margin: 0 0 20px 0; text-shadow: 0 0 10px #46e0ffe6;">VICTOIRE!</h1>
       <p style="color: #fff; font-size: 32px; margin: 10px 0;">${winnerName} gagne!</p>
       <div style="margin: 30px 0; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 10px;">
         <p style="color: #00d4ffff; font-size: 24px; margin: 5px 0;">Score Final</p>
@@ -292,12 +307,19 @@ export class PongGameRenderer {
     overlay.appendChild(content);
     document.body.appendChild(overlay);
 
-    // Bouton restart
+    // Bouton restart - appelle le callback si fourni
     const restartBtn = document.getElementById('restart-btn');
     if (restartBtn) {
       restartBtn.addEventListener('click', () => {
-        overlay.remove();
-        this.engine.restart();
+        if (onRestart) {
+          onRestart();
+        } else {
+          // Mode local - restart direct
+          overlay.remove();
+          if (this.engine.restart) {
+            this.engine.restart();
+          }
+        }
       });
     }
 
@@ -305,9 +327,10 @@ export class PongGameRenderer {
     if (accueilBtn) {
       accueilBtn.addEventListener('click', () => {
         overlay.remove();
-        this.engine.stop();
-        // Redirect to main menu or perform desired action
-        window.location.href = '/';  // Exemple de redirection vers la page d'accueil
+        if (this.engine.stop) {
+          this.engine.stop();
+        }
+        window.location.href = '/';
       });
     }
   }
@@ -317,10 +340,225 @@ export class PongGameRenderer {
     if (overlay) overlay.remove();
   }
 
+  public showReadyScreen(): void {
+    // Créer overlay pour l'écran ready
+    const overlay = document.createElement('div');
+    overlay.id = 'ready-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease-in;
+    `;
+
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: linear-gradient(135deg, #36363677 0%, #49494975 100%);
+      padding: 60px 80px;
+      border-radius: 15px;
+      text-align: center;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      border: 2px solid #00d4ff;
+      animation: slideIn 0.4s ease-out;
+    `;
+
+    content.innerHTML = `
+      <style>
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideIn {
+          from { transform: translateY(-50px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.05); opacity: 0.8; }
+        }
+        .ready-indicator {
+          display: inline-block;
+          padding: 10px 20px;
+          margin: 10px;
+          border-radius: 8px;
+          font-size: 18px;
+          font-weight: bold;
+          transition: all 0.3s ease;
+        }
+        .ready-yes {
+          background: #00ff00;
+          color: #000;
+          box-shadow: 0 0 20px #00ff00;
+        }
+        .ready-no {
+          background: #555;
+          color: #888;
+        }
+      </style>
+      <h1 style="color: #00d4ff; font-size: 48px; margin: 0 0 20px 0; text-shadow: 0 0 10px #46e0ff;">En attente...</h1>
+      <p style="color: #fff; font-size: 24px; margin: 20px 0;">Les deux joueurs doivent être prêts</p>
+      <div style="margin: 30px 0;">
+        <div class="ready-indicator ready-no" id="player1-ready">${this.engine.player1Name}: En attente...</div>
+        <div class="ready-indicator ready-no" id="player2-ready">${this.engine.player2Name}: En attente...</div>
+      </div>
+      <p style="color: #00d4ff; font-size: 28px; margin: 30px 0; animation: pulse 2s infinite;">
+        Appuyez sur ESPACE quand vous êtes prêt
+      </p>
+    `;
+
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+  }
+
+  public updateReadyStatus(player1Ready: boolean, player2Ready: boolean): void {
+    const p1Indicator = document.getElementById('player1-ready');
+    const p2Indicator = document.getElementById('player2-ready');
+
+    if (p1Indicator) {
+      if (player1Ready) {
+        p1Indicator.className = 'ready-indicator ready-yes';
+        p1Indicator.textContent = `${this.engine.player1Name}: PRET!`;
+      } else {
+        p1Indicator.className = 'ready-indicator ready-no';
+        p1Indicator.textContent = `${this.engine.player1Name}: En attente...`;
+      }
+    }
+
+    if (p2Indicator) {
+      if (player2Ready) {
+        p2Indicator.className = 'ready-indicator ready-yes';
+        p2Indicator.textContent = `${this.engine.player2Name}: PRET!`;
+      } else {
+        p2Indicator.className = 'ready-indicator ready-no';
+        p2Indicator.textContent = `${this.engine.player2Name}: En attente...`;
+      }
+    }
+  }
+
+  public startCountdown(duration: number, onComplete: () => void): void {
+    const overlay = document.createElement('div');
+    overlay.id = 'countdown-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease-in;
+    `;
+
+    const content = document.createElement('div');
+    content.id = 'countdown-content';
+    content.style.cssText = `
+      background: linear-gradient(135deg, #36363677 0%, #49494975 100%);
+      padding: 60px 80px;
+      border-radius: 15px;
+      text-align: center;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.38);
+      border: 2px solid #00d4ff;
+      animation: slideIn 0.4s ease-out;
+    `;
+
+    content.innerHTML = `
+      <style>
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideIn {
+          from { transform: translateY(-50px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+        }
+        @keyframes fadeOut {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+      </style>
+      <h1 style="color: #00d4ff; font-size: 48px; margin: 0 0 30px 0; text-shadow: 0 0 10px #46e0ff;">Préparez-vous!</h1>
+      <div id="countdown-number" style="color: #00ff00; font-size: 120px; font-weight: bold; margin: 30px 0; text-shadow: 0 0 30px #00ff00; animation: pulse 1s infinite;">${duration}</div>
+      <p style="color: #fff; font-size: 24px; margin: 20px 0;">Le jeu commence dans...</p>
+    `;
+
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+
+    let timeLeft = duration;
+    const countdownNumber = document.getElementById('countdown-number');
+
+    const interval = setInterval(() => {
+      timeLeft--;
+
+      if (countdownNumber) {
+        countdownNumber.textContent = timeLeft.toString();
+
+        // Change color for last 3 seconds
+        if (timeLeft <= 3) {
+          countdownNumber.style.color = '#ff0000';
+          countdownNumber.style.textShadow = '0 0 30px #ff0000';
+        }
+
+        // Animation for each number change
+        countdownNumber.style.animation = 'none';
+        setTimeout(() => {
+          if (countdownNumber) {
+            countdownNumber.style.animation = 'pulse 1s infinite';
+          }
+        }, 10);
+      }
+
+      if (timeLeft <= 0) {
+        clearInterval(interval);
+
+        // Show "GO!" message
+        if (countdownNumber) {
+          countdownNumber.textContent = 'GO!';
+          countdownNumber.style.color = '#00ff00';
+          countdownNumber.style.textShadow = '0 0 50px #00ff00';
+          countdownNumber.style.animation = 'pulse 0.5s ease-out';
+        }
+
+        // Remove overlay after a short delay
+        setTimeout(() => {
+          overlay.style.animation = 'fadeOut 0.3s ease-out';
+          setTimeout(() => {
+            overlay.remove();
+            onComplete();
+          }, 300);
+        }, 1000);
+      }
+    }, 1000);
+  }
+
+  public hideReadyScreen(): void {
+    const overlay = document.getElementById('ready-overlay');
+    if (overlay) {
+      overlay.style.animation = 'fadeOut 0.3s ease-out';
+      setTimeout(() => overlay.remove(), 300);
+    }
+  }
+
   public cleanup(): void {
     if (this.playerNamesContainer) {
       this.playerNamesContainer.remove();
       this.playerNamesContainer = null;
     }
+    this.removeGameOverScreen();
+    this.hideReadyScreen();
   }
 }

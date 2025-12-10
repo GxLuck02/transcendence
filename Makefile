@@ -1,4 +1,4 @@
-.PHONY: all help setup ssl env frontend build up down clean fclean re logs shell
+.PHONY: all help setup ssl env frontend build rebuild up down clean fclean re nuke logs shell
 
 # Colors for output
 GREEN = \033[0;32m
@@ -21,6 +21,7 @@ help:
 	@echo "  $(YELLOW)make setup$(NC)    - First time setup (SSL + .env + frontend)"
 	@echo "  $(YELLOW)make frontend$(NC) - Build frontend only"
 	@echo "  $(YELLOW)make build$(NC)    - Build Docker containers"
+	@echo "  $(YELLOW)make rebuild$(NC)  - Build containers without cache"
 	@echo "  $(YELLOW)make up$(NC)       - Start all services"
 	@echo "  $(YELLOW)make down$(NC)     - Stop all services"
 	@echo "  $(YELLOW)make logs$(NC)     - View logs"
@@ -28,6 +29,7 @@ help:
 	@echo "  $(YELLOW)make clean$(NC)    - Stop and remove containers"
 	@echo "  $(YELLOW)make fclean$(NC)   - Full clean (including volumes)"
 	@echo "  $(YELLOW)make re$(NC)       - Rebuild everything from scratch"
+	@echo "  $(YELLOW)make nuke$(NC)     - $(RED)NUCLEAR$(NC) rebuild (purge ALL Docker cache)"
 
 setup: ssl env frontend
 	@echo "$(GREEN)✓ Setup complete! You can now run: make build && make up$(NC)"
@@ -76,6 +78,11 @@ build:
 	docker compose build
 	@echo "$(GREEN)✓ Build complete$(NC)"
 
+rebuild:
+	@echo "$(YELLOW)Rebuilding Docker containers (no cache)...$(NC)"
+	docker compose build --no-cache
+	@echo "$(GREEN)✓ Rebuild complete$(NC)"
+
 up:
 	@echo "$(YELLOW)Starting all services...$(NC)"
 	docker compose up -d
@@ -100,6 +107,33 @@ fclean: clean
 	@echo "$(GREEN)✓ Full cleanup complete$(NC)"
 
 re: fclean setup build up
+
+nuke:
+	@echo "$(RED)═══════════════════════════════════════════════════════════$(NC)"
+	@echo "$(RED)  ⚠️  ATTENTION: NUCLEAR REBUILD  ⚠️$(NC)"
+	@echo "$(RED)═══════════════════════════════════════════════════════════$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Cette commande va:$(NC)"
+	@echo "  - Supprimer TOUS les containers et volumes du projet"
+	@echo "  - $(RED)Purger TOUT le cache Docker de votre machine$(NC)"
+	@echo "  - $(RED)Supprimer TOUTES les images Docker non utilisées$(NC)"
+	@echo "  - Reconstruire le projet de zéro"
+	@echo ""
+	@echo "$(YELLOW)Cela peut affecter vos autres projets Docker!$(NC)"
+	@echo ""
+	@read -p "Êtes-vous sûr de vouloir continuer? [y/N] " confirm && [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ] || (echo "$(GREEN)Annulé.$(NC)" && exit 1)
+	@echo ""
+	$(MAKE) fclean
+	@echo "$(RED)Nuclear rebuild - removing ALL Docker cache...$(NC)"
+	docker system prune -af --volumes 2>/dev/null || true
+	@echo "$(YELLOW)Rebuilding from scratch...$(NC)"
+	$(MAKE) setup
+	docker compose build --no-cache --pull
+	docker compose up -d
+	@echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"
+	@echo "$(GREEN)  ✓ Nuclear rebuild complete!$(NC)"
+	@echo "$(GREEN)  Access the application at: https://localhost:8443$(NC)"
+	@echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"
 
 logs:
 	docker compose logs -f

@@ -553,12 +553,28 @@ class Router {
           </section>
 
           <section id="remote-manual" class="card" style="${focus === 'manual' ? 'border: 2px solid #00d4ff;' : ''}">
-            <h3>Rejoindre via code d'invitation</h3>
-            <form id="remote-room-form" class="auth-form" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <input type="text" id="remote-room-code" placeholder="Code de la salle (ex: ABC123)" style="flex: 1; min-width: 180px;" required />
-              <button type="submit" class="btn btn-primary">Rejoindre</button>
-            </form>
-            <p style="margin-top: 0.5rem; color: #888;">Vous recevez ce code lorsqu'un ami vous invite via le chat.</p>
+            <h3>Créer ou rejoindre un salon privé</h3>
+
+            <div style="margin-bottom: 1.5rem;">
+              <h4>Créer un nouveau salon</h4>
+              <p style="color: #888; font-size: 0.9rem;">Créez un salon et partagez le code avec vos amis</p>
+              <button id="create-private-room" class="btn btn-success">Créer un salon privé</button>
+              <div id="created-room-info" style="display: none; margin-top: 1rem; padding: 1rem; background: rgba(0, 212, 255, 0.1); border: 1px solid #00d4ff; border-radius: 4px;">
+                <p><strong>Salon créé !</strong></p>
+                <p>Code de la salle : <code id="created-room-code" style="font-size: 1.2rem; padding: 0.3rem 0.6rem; background: #000; border-radius: 4px;"></code></p>
+                <p style="font-size: 0.9rem; color: #888;">Partagez ce code avec votre ami pour qu'il puisse rejoindre</p>
+                <button id="join-created-room" class="btn btn-primary">Rejoindre mon salon</button>
+              </div>
+            </div>
+
+            <div style="border-top: 1px solid #333; padding-top: 1.5rem;">
+              <h4>Rejoindre un salon existant</h4>
+              <form id="remote-room-form" class="auth-form" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <input type="text" id="remote-room-code" placeholder="Code de la salle (ex: ABC123)" style="flex: 1; min-width: 180px;" required />
+                <button type="submit" class="btn btn-primary">Rejoindre</button>
+              </form>
+              <p style="margin-top: 0.5rem; color: #888; font-size: 0.9rem;">Entrez le code que votre ami vous a partagé</p>
+            </div>
           </section>
         </div>
 
@@ -601,6 +617,22 @@ class Router {
     document.getElementById('start-remote-match')?.addEventListener('click', () => {
       if (this.remoteMatchInfo) {
         this.launchRemoteGame(this.remoteMatchInfo.roomCode);
+      }
+    });
+
+    // Create private room button
+    document.getElementById('create-private-room')?.addEventListener('click', async () => {
+      await this.createPrivateRoom();
+    });
+
+    // Join created room button
+    document.getElementById('join-created-room')?.addEventListener('click', () => {
+      const codeElement = document.getElementById('created-room-code');
+      if (codeElement) {
+        const roomCode = codeElement.textContent?.trim();
+        if (roomCode) {
+          this.launchRemoteGame(roomCode);
+        }
       }
     });
 
@@ -840,6 +872,53 @@ class Router {
     }
   }
 
+  private async createPrivateRoom(): Promise<void> {
+    try {
+      const createBtn = document.getElementById('create-private-room') as HTMLButtonElement;
+      if (createBtn) {
+        createBtn.disabled = true;
+        createBtn.textContent = 'Création en cours...';
+      }
+
+      // Create a match first (without player2_id for open room)
+      const match = await this.apiRequest('/pong/matches/create/', {
+        method: 'POST',
+        body: JSON.stringify({
+          game_mode: '2p_remote',
+        }),
+      });
+
+      // Create the room
+      const room = await this.apiRequest('/pong/rooms/create/', {
+        method: 'POST',
+        body: JSON.stringify({
+          match_id: match.id,
+        }),
+      });
+
+      // Display the room code
+      const roomCodeElement = document.getElementById('created-room-code');
+      const roomInfoDiv = document.getElementById('created-room-info');
+
+      if (roomCodeElement && roomInfoDiv) {
+        roomCodeElement.textContent = room.room_code;
+        roomInfoDiv.style.display = 'block';
+      }
+
+      if (createBtn) {
+        createBtn.textContent = 'Créer un autre salon';
+        createBtn.disabled = false;
+      }
+    } catch (error) {
+      console.error('Error creating private room:', error);
+      const createBtn = document.getElementById('create-private-room') as HTMLButtonElement;
+      if (createBtn) {
+        createBtn.textContent = 'Créer un salon privé';
+        createBtn.disabled = false;
+      }
+      alert(`Erreur: ${(error as Error).message}`);
+    }
+  }
 
   private startPongGame(mode: 'vs_local' | '2p_local' | 'vs_ai' | '2p_remote', aiDifficulty?: 'easy' | 'medium' | 'hard'): void {
     // Hide mode selector and AI difficulty selector, show game
