@@ -100,3 +100,6 @@ coverage.xml
 *.bak
 *.backup
 *.old
+
+# Personal tracking files
+Suivi
